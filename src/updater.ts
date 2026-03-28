@@ -1,5 +1,5 @@
-import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
 
 export async function checkForUpdates(silent = false): Promise<void> {
   try {
@@ -11,9 +11,7 @@ export async function checkForUpdates(silent = false): Promise<void> {
       return;
     }
 
-    const confirmed = window.confirm(
-      `發現新版本 ${update.version}，是否要下載並安裝？`,
-    );
+    const confirmed = window.confirm(`發現新版本 ${update.version}，是否要下載並安裝？`);
     if (!confirmed) return;
 
     showUpdateNotification("正在下載更新…");

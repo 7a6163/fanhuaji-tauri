@@ -140,10 +140,7 @@ async fn get_service_info() -> Result<ServiceInfo, String> {
                         .and_then(|v| v.as_str())
                         .unwrap_or_default()
                         .to_string();
-                    let cat_id = val
-                        .get("cat")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("unknown");
+                    let cat_id = val.get("cat").and_then(|v| v.as_str()).unwrap_or("unknown");
                     let category = category_names
                         .get(cat_id)
                         .cloned()
