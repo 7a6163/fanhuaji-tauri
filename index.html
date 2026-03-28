@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>繁化姬 1.0.0</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-group info-group">
+          <span class="group-title">繁化姬</span>
+          <div class="group-content">
+            <span>伺服器</span>
+            <a id="server-url" class="link" href="#">https://api.zhconvert.org</a>
+            <span>資料庫版本</span>
+            <span id="dict-version" class="dict-version"></span>
+          </div>
+        </div>
+        <div class="header-group converter-group">
+          <span class="group-title">轉換</span>
+          <div class="group-content">
+            <select id="converter">
+              <optgroup label="繁簡">
+                <option value="Traditional">繁體化</option>
+                <option value="Simplified">簡體化</option>
+              </optgroup>
+              <optgroup label="本地化">
+                <option value="China">中國化</option>
+                <option value="Hongkong">香港化</option>
+                <option value="Taiwan" selected>台灣化</option>
+              </optgroup>
+              <optgroup label="其他">
+                <option value="Bopomofo">注音化</option>
+                <option value="Mars">火星化</option>
+                <option value="Pinyin">拼音化</option>
+              </optgroup>
+              <optgroup label="第三方服務">
+                <option value="WikiSimplified">維基簡體化</option>
+                <option value="WikiTraditional">維基繁體化</option>
+              </optgroup>
+              <optgroup label="App 限定模式">
+                <option value="_encodingOnly">僅轉換字符編碼</option>
+                <option value="_renameOnly">僅修改檔案名稱</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+      </header>
+
+      <!-- Tabs -->
+      <nav class="tabs">
+        <button class="tab active" data-tab="file-list">檔案清單</button>
+        <button class="tab" data-tab="save-options">存檔選項</button>
+        <button class="tab" data-tab="modules">詞語模組</button>
+        <button class="tab" data-tab="custom-replace">自訂取代</button>
+        <button class="tab" data-tab="file-preview">檔案預覽</button>
+      </nav>
+
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- 檔案清單 -->
+        <div id="tab-file-list" class="tab-panel active">
+          <div class="file-list-layout">
+            <div class="table-container">
+              <table id="file-table">
+                <thead>
+                  <tr>
+                    <th>輸入路徑</th>
+                    <th>輸入檔名</th>
+                    <th>字元編碼</th>
+                    <th>狀態</th>
+                    <th>系統訊息</th>
+                    <th>輸出檔名</th>
+                    <th>輸出路徑</th>
+                  </tr>
+                </thead>
+                <tbody id="file-table-body">
+                </tbody>
+              </table>
+            </div>
+            <div class="file-actions">
+              <button id="btn-open" class="action-btn">
+                <span class="icon icon-open"></span>開啟檔案…
+              </button>
+              <button id="btn-remove-all" class="action-btn">
+                <span class="icon icon-remove-all"></span>刪除所有
+              </button>
+              <button id="btn-remove-done" class="action-btn">
+                <span class="icon icon-remove-done"></span>刪除已完成
+              </button>
+              <button id="btn-reset-errors" class="action-btn">
+                <span class="icon icon-reset"></span>重設錯誤
+              </button>
+              <button id="btn-convert-all" class="action-btn convert-btn">
+                <span class="icon icon-convert"></span>轉換所有
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 存檔選項 -->
+        <div id="tab-save-options" class="tab-panel">
+          <div class="options-form">
+            <div class="form-row">
+              <label>存檔資料夾</label>
+              <select id="save-folder">
+                <option value="same">輸入檔所在資料夾</option>
+                <option value="custom">自訂資料夾…</option>
+              </select>
+            </div>
+            <hr />
+            <div class="form-row">
+              <label>命名方式</label>
+              <select id="naming">
+                <option value="auto">自動命名</option>
+                <option value="overwrite">覆蓋原檔</option>
+                <option value="suffix">加入後綴</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 詞語模組 -->
+        <div id="tab-modules" class="tab-panel">
+          <div class="modules-header">
+            <select id="module-default">
+              <option value="auto">自動偵測</option>
+              <option value="enable">全部啟用</option>
+              <option value="disable">全部停用</option>
+            </select>
+            <button id="btn-global-setting" class="text-btn">全域設定</button>
+            <button id="btn-apply-all" class="text-btn">一次設定所有選項</button>
+          </div>
+          <div class="modules-layout">
+            <div class="module-categories" id="module-categories">
+            </div>
+            <div class="module-list" id="module-list">
+            </div>
+          </div>
+        </div>
+
+        <!-- 自訂取代 -->
+        <div id="tab-custom-replace" class="tab-panel">
+          <div class="replace-section">
+            <h3>轉換前取代（Pre-Replace）</h3>
+            <textarea id="pre-replace" placeholder="格式：搜尋=取代（每行一組）" rows="5"></textarea>
+          </div>
+          <div class="replace-section">
+            <h3>轉換後取代（Post-Replace）</h3>
+            <textarea id="post-replace" placeholder="格式：搜尋=取代（每行一組）" rows="5"></textarea>
+          </div>
+          <div class="replace-section">
+            <h3>保護詞彙（不轉換）</h3>
+            <textarea id="protect-replace" placeholder="每行一個詞彙" rows="5"></textarea>
+          </div>
+        </div>
+
+        <!-- 檔案預覽 -->
+        <div id="tab-file-preview" class="tab-panel">
+          <div class="preview-sidebar">
+            <button class="preview-nav active" data-preview="file-info">
+              <span class="preview-icon">i</span>檔案資訊
+            </button>
+            <button class="preview-nav" data-preview="input-preview">
+              <span class="preview-icon">&uarr;</span>輸入檔案預覽
+            </button>
+            <button class="preview-nav" data-preview="output-preview">
+              <span class="preview-icon">&darr;</span>輸出檔案預覽
+            </button>
+            <button class="preview-nav" data-preview="diff-view">
+              <span class="preview-icon">&square;</span>差異比較
+            </button>
+            <button class="preview-nav" data-preview="convert-info">
+              <span class="preview-icon">i</span>轉換資訊
+            </button>
+          </div>
+          <div class="preview-content" id="preview-content">
+            <p class="placeholder-text">在檔案清單內雙擊字幕以獲得輸入檔案資訊</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Bar -->
+      <footer class="status-bar">
+        <span class="status-badge blue">全部: <span id="count-total">0</span></span>
+        <span class="status-badge yellow">待轉換: <span id="count-pending">0</span></span>
+        <span class="status-badge green">成功轉換: <span id="count-success">0</span></span>
+        <span class="status-badge red">錯誤: <span id="count-error">0</span></span>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
