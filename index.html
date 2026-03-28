@@ -61,6 +61,7 @@
         <button type="button" class="tab" data-tab="modules">詞語模組</button>
         <button type="button" class="tab" data-tab="custom-replace">自訂取代</button>
         <button type="button" class="tab" data-tab="file-preview">檔案預覽</button>
+        <button type="button" class="tab" data-tab="settings">設定</button>
       </nav>
 
       <!-- Tab Content -->
@@ -183,6 +184,66 @@
           </div>
           <div class="preview-content" id="preview-content">
             <p class="placeholder-text">在檔案清單內雙擊字幕以獲得輸入檔案資訊</p>
+          </div>
+        </div>
+
+        <!-- 設定 -->
+        <div id="tab-settings" class="tab-panel">
+          <div class="settings-form">
+            <h3><i class="ti ti-palette"></i> 外觀</h3>
+            <div class="setting-row">
+              <label>主題</label>
+              <div class="theme-options" id="theme-options">
+                <button type="button" class="theme-option active" data-theme="system">
+                  <i class="ti ti-device-desktop"></i>系統
+                </button>
+                <button type="button" class="theme-option" data-theme="light">
+                  <i class="ti ti-sun"></i>淺色
+                </button>
+                <button type="button" class="theme-option" data-theme="dark">
+                  <i class="ti ti-moon"></i>深色
+                </button>
+              </div>
+            </div>
+
+            <hr />
+
+            <h3><i class="ti ti-refresh"></i> 更新</h3>
+            <div class="setting-row">
+              <label>應用程式更新</label>
+              <div class="setting-actions">
+                <button type="button" id="btn-check-update" class="action-btn">
+                  <i class="ti ti-cloud-download"></i>檢查更新
+                </button>
+                <span id="update-status" class="setting-hint"></span>
+              </div>
+            </div>
+
+            <hr />
+
+            <h3><i class="ti ti-info-circle"></i> 關於</h3>
+            <div class="setting-row">
+              <label>版本</label>
+              <span id="app-version" class="setting-value">1.0.0</span>
+            </div>
+            <div class="setting-row">
+              <label>繁化姬 API</label>
+              <span class="setting-value">
+                <a class="link" data-href="https://zhconvert.org">zhconvert.org</a>
+              </span>
+            </div>
+            <div class="setting-row">
+              <label>服務條款</label>
+              <span class="setting-value">
+                <a class="link" data-href="https://docs.zhconvert.org/license/">docs.zhconvert.org/license</a>
+              </span>
+            </div>
+            <div class="setting-row">
+              <label>原始碼</label>
+              <span class="setting-value">
+                <a class="link" data-href="https://github.com/7a6163/fanhuaji-tauri">GitHub</a>
+              </span>
+            </div>
           </div>
         </div>
       </div>

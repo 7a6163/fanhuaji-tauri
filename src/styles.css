@@ -1,4 +1,6 @@
-:root {
+/* Light theme (default) */
+:root,
+[data-theme="light"] {
   --bg: #ececec;
   --surface: #fff;
   --border: #c0c0c0;
@@ -24,11 +26,41 @@
   --scrollbar-thumb: #bbb;
   --scrollbar-thumb-hover: #999;
   --hr-color: var(--text);
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
+/* Dark theme */
+[data-theme="dark"] {
+  --bg: #1e1e1e;
+  --surface: #2a2a2a;
+  --border: #444;
+  --border-light: #3a3a3a;
+  --text: #e0e0e0;
+  --text-muted: #999;
+  --link: #5ca0f0;
+  --accent-blue: #4a90e2;
+  --badge-blue: #4a7cf7;
+  --badge-yellow: #e09520;
+  --badge-green: #4caf50;
+  --badge-red: #ef5350;
+  --tab-bg: #2c2c2c;
+  --tab-active: #1e1e1e;
+  --th-bg: #333;
+  --td-border: #383838;
+  --td-border-light: #333;
+  --hover-bg: #2a3a50;
+  --hover-subtle: #333;
+  --hover-medium: #3a3a3a;
+  --scrollbar-track: #2a2a2a;
+  --scrollbar-thumb: #555;
+  --scrollbar-thumb-hover: #777;
+  --hr-color: var(--border);
+  color-scheme: dark;
+}
+
+/* System preference (when data-theme="system" or not set) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  [data-theme="system"] {
     --bg: #1e1e1e;
     --surface: #2a2a2a;
     --border: #444;
@@ -53,6 +85,7 @@
     --scrollbar-thumb: #555;
     --scrollbar-thumb-hover: #777;
     --hr-color: var(--border);
+    color-scheme: dark;
   }
 }
 
@@ -554,6 +587,109 @@ tr.status-error td {
 
 .status-badge.red {
   background: var(--badge-red);
+}
+
+/* 設定 */
+#tab-settings {
+  flex-direction: column;
+  padding: 0;
+}
+
+.settings-form {
+  padding: 16px 24px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.settings-form h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 16px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-form h3:first-child {
+  margin-top: 0;
+}
+
+.settings-form h3 .ti {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.settings-form hr {
+  border: none;
+  border-top: 1px solid var(--border-light);
+  margin: 12px 0;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.setting-row label {
+  font-weight: 500;
+  min-width: 100px;
+  font-size: 13px;
+}
+
+.setting-value {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.setting-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.setting-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-options {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.theme-option:last-child {
+  border-right: none;
+}
+
+.theme-option:hover {
+  background: var(--hover-subtle);
+}
+
+.theme-option.active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.theme-option .ti {
+  font-size: 14px;
 }
 
 /* Drop zone overlay */

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { checkForUpdates } from "./updater";
+import { initTheme } from "./theme";
+import { initUpdater } from "./updater";
 
 // --- Types ---
 
@@ -360,6 +361,7 @@ document.addEventListener("drop", async (e) => {
 
 // --- Init ---
 
+initTheme();
+initUpdater();
 loadServiceInfo();
 renderFileTable();
-checkForUpdates(true);
