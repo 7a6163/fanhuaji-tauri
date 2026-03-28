@@ -119,29 +119,37 @@ async fn get_service_info() -> Result<ServiceInfo, String> {
     let mut modules = Vec::new();
 
     if let Some(data) = &info.data {
-        let categories: HashMap<String, Vec<String>> = data
+        // moduleCategories: { "cat_id": "顯示名稱" }
+        let category_names: HashMap<String, String> = data
             .module_categories
             .as_ref()
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or_default();
 
-        let mut module_to_category: HashMap<String, String> = HashMap::new();
-        for (cat_name, cat_modules) in &categories {
-            for m in cat_modules {
-                module_to_category.insert(m.clone(), cat_name.clone());
-            }
-        }
-
+        // modules: { "ModuleName": { "name": "...", "desc": "...", "cat": "cat_id" } }
         if let Some(mods) = &data.modules {
             if let Some(obj) = mods.as_object() {
-                for (name, val) in obj {
-                    let desc = val.as_str().map(|s| s.to_string()).unwrap_or_default();
-                    let category = module_to_category
-                        .get(name)
+                for (key, val) in obj {
+                    let name = val
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(key)
+                        .to_string();
+                    let desc = val
+                        .get("desc")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    let cat_id = val
+                        .get("cat")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    let category = category_names
+                        .get(cat_id)
                         .cloned()
                         .unwrap_or_else(|| "未知".to_string());
                     modules.push(ModuleInfo {
-                        name: name.clone(),
+                        name,
                         description: desc,
                         category,
                     });
@@ -309,6 +317,13 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_service_info,
             open_files_dialog,

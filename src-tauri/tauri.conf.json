@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "繁化姬",
+        "title": "繁化姬 1.0.0",
         "width": 760,
         "height": 680,
         "resizable": true,
@@ -20,12 +20,13 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src https://api.zhconvert.org; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'"
+      "csp": "default-src 'self'; connect-src https://api.zhconvert.org https://github.com https://objects.githubusercontent.com; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -33,5 +34,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYxOUM3RDI5NzUwRkFERDkKUldUWnJROTFLWDJjOFFBYXFPZjNzbjJtQXArMDl3dldzR0RqNGYvMEVxKzVyTmxCN1Q0UGFtZUsK",
+      "endpoints": [
+        "https://github.com/7a6163/fanhuaji-tauri/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

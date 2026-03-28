@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { checkForUpdates } from "./updater";
 
 // --- Types ---
 
@@ -336,6 +338,16 @@ $<HTMLButtonElement>("#btn-reset-errors").addEventListener("click", () => {
   renderFileTable();
 });
 
+// --- External links ---
+
+document.querySelectorAll<HTMLAnchorElement>("a[data-href]").forEach((a) => {
+  a.addEventListener("click", (e) => {
+    e.preventDefault();
+    const url = a.dataset.href;
+    if (url) openUrl(url);
+  });
+});
+
 // --- Drag & Drop ---
 
 document.addEventListener("dragover", (e) => {
@@ -350,3 +362,4 @@ document.addEventListener("drop", async (e) => {
 
 loadServiceInfo();
 renderFileTable();
+checkForUpdates(true);
