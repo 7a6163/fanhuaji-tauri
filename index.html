@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>繁化姬 1.0.0</title>
+    <title>繁化姬</title>
+    <link rel="stylesheet" href="/node_modules/@tabler/icons-webfont/dist/tabler-icons.min.css" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
@@ -17,6 +18,9 @@
             <a id="server-url" class="link" href="#">https://api.zhconvert.org</a>
             <span>資料庫版本</span>
             <span id="dict-version" class="dict-version"></span>
+          </div>
+          <div class="group-footer">
+            本程式使用了<a class="link" data-href="https://zhconvert.org">繁化姬</a>的 API 服務。<a class="link" data-href="https://docs.zhconvert.org/license/">繁化姬商用必須付費</a>。字幕中的推廣內容於免費使用時不得移除。
           </div>
         </div>
         <div class="header-group converter-group">
@@ -52,11 +56,11 @@
 
       <!-- Tabs -->
       <nav class="tabs">
-        <button class="tab active" data-tab="file-list">檔案清單</button>
-        <button class="tab" data-tab="save-options">存檔選項</button>
-        <button class="tab" data-tab="modules">詞語模組</button>
-        <button class="tab" data-tab="custom-replace">自訂取代</button>
-        <button class="tab" data-tab="file-preview">檔案預覽</button>
+        <button type="button" class="tab active" data-tab="file-list">檔案清單</button>
+        <button type="button" class="tab" data-tab="save-options">存檔選項</button>
+        <button type="button" class="tab" data-tab="modules">詞語模組</button>
+        <button type="button" class="tab" data-tab="custom-replace">自訂取代</button>
+        <button type="button" class="tab" data-tab="file-preview">檔案預覽</button>
       </nav>
 
       <!-- Tab Content -->
@@ -82,20 +86,20 @@
               </table>
             </div>
             <div class="file-actions">
-              <button id="btn-open" class="action-btn">
-                <span class="icon icon-open"></span>開啟檔案…
+              <button type="button" id="btn-open" class="action-btn">
+                <i class="ti ti-folder-open"></i>開啟檔案…
               </button>
-              <button id="btn-remove-all" class="action-btn">
-                <span class="icon icon-remove-all"></span>刪除所有
+              <button type="button" id="btn-remove-all" class="action-btn">
+                <i class="ti ti-trash"></i>刪除所有
               </button>
-              <button id="btn-remove-done" class="action-btn">
-                <span class="icon icon-remove-done"></span>刪除已完成
+              <button type="button" id="btn-remove-done" class="action-btn">
+                <i class="ti ti-circle-check"></i>刪除已完成
               </button>
-              <button id="btn-reset-errors" class="action-btn">
-                <span class="icon icon-reset"></span>重設錯誤
+              <button type="button" id="btn-reset-errors" class="action-btn">
+                <i class="ti ti-refresh"></i>重設錯誤
               </button>
-              <button id="btn-convert-all" class="action-btn convert-btn">
-                <span class="icon icon-convert"></span>轉換所有
+              <button type="button" id="btn-convert-all" class="action-btn convert-btn">
+                <i class="ti ti-transform"></i>轉換所有
               </button>
             </div>
           </div>
@@ -131,8 +135,8 @@
               <option value="enable">全部啟用</option>
               <option value="disable">全部停用</option>
             </select>
-            <button id="btn-global-setting" class="text-btn">全域設定</button>
-            <button id="btn-apply-all" class="text-btn">一次設定所有選項</button>
+            <button type="button" id="btn-global-setting" class="text-btn">全域設定</button>
+            <button type="button" id="btn-apply-all" class="text-btn">一次設定所有選項</button>
           </div>
           <div class="modules-layout">
             <div class="module-categories" id="module-categories">
@@ -161,20 +165,20 @@
         <!-- 檔案預覽 -->
         <div id="tab-file-preview" class="tab-panel">
           <div class="preview-sidebar">
-            <button class="preview-nav active" data-preview="file-info">
-              <span class="preview-icon">i</span>檔案資訊
+            <button type="button" class="preview-nav active" data-preview="file-info">
+              <i class="ti ti-info-circle"></i>檔案資訊
             </button>
-            <button class="preview-nav" data-preview="input-preview">
-              <span class="preview-icon">&uarr;</span>輸入檔案預覽
+            <button type="button" class="preview-nav" data-preview="input-preview">
+              <i class="ti ti-file-import"></i>輸入檔案預覽
             </button>
-            <button class="preview-nav" data-preview="output-preview">
-              <span class="preview-icon">&darr;</span>輸出檔案預覽
+            <button type="button" class="preview-nav" data-preview="output-preview">
+              <i class="ti ti-file-export"></i>輸出檔案預覽
             </button>
-            <button class="preview-nav" data-preview="diff-view">
-              <span class="preview-icon">&square;</span>差異比較
+            <button type="button" class="preview-nav" data-preview="diff-view">
+              <i class="ti ti-arrows-diff"></i>差異比較
             </button>
-            <button class="preview-nav" data-preview="convert-info">
-              <span class="preview-icon">i</span>轉換資訊
+            <button type="button" class="preview-nav" data-preview="convert-info">
+              <i class="ti ti-list-details"></i>轉換資訊
             </button>
           </div>
           <div class="preview-content" id="preview-content">

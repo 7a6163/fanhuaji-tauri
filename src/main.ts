@@ -1,4 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { checkForUpdates } from "./updater";
 
 // --- Types ---
 
@@ -11,12 +13,6 @@ interface FileEntry {
   message: string;
   outputName: string;
   outputPath: string;
-}
-
-interface ConvertResult {
-  text: string;
-  converter: string;
-  modules: string[];
 }
 
 interface ServiceInfo {
@@ -33,19 +29,37 @@ interface ModuleInfo {
 // --- State ---
 
 let files: FileEntry[] = [];
-let selectedFileId: string | null = null;
+let isConverting = false;
 let moduleData: ModuleInfo[] = [];
 let moduleSettings: Record<string, string> = {};
 let activeCategory = "";
 
+// --- Utilities ---
+
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function generateId(): string {
+  return crypto.randomUUID();
+}
+
 // --- DOM ---
 
-const $ = <T extends HTMLElement>(sel: string): T =>
-  document.querySelector(sel) as T;
+const $ = <T extends HTMLElement>(sel: string): T => {
+  const el = document.querySelector<T>(sel);
+  if (!el) throw new Error(`必要元素不存在：${sel}`);
+  return el;
+};
 
 const converterEl = $<HTMLSelectElement>("#converter");
 const dictVersionEl = $<HTMLSpanElement>("#dict-version");
 const fileTableBody = $<HTMLTableSectionElement>("#file-table-body");
+const convertBtn = $<HTMLButtonElement>("#btn-convert-all");
 
 // Counts
 const countTotal = $<HTMLSpanElement>("#count-total");
@@ -53,12 +67,34 @@ const countPending = $<HTMLSpanElement>("#count-pending");
 const countSuccess = $<HTMLSpanElement>("#count-success");
 const countError = $<HTMLSpanElement>("#count-error");
 
+// --- UI Feedback ---
+
+function showError(msg: string) {
+  const statusBar = document.querySelector(".status-bar");
+  if (!statusBar) return;
+
+  const existing = document.getElementById("error-toast");
+  if (existing) existing.remove();
+
+  const toast = document.createElement("span");
+  toast.id = "error-toast";
+  toast.className = "status-badge red";
+  toast.textContent = msg;
+  statusBar.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 5000);
+}
+
 // --- Tabs ---
 
 document.querySelectorAll<HTMLButtonElement>(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach((t) => {
+      t.classList.remove("active");
+    });
+    document.querySelectorAll(".tab-panel").forEach((p) => {
+      p.classList.remove("active");
+    });
     tab.classList.add("active");
     const panel = document.getElementById(`tab-${tab.dataset.tab}`);
     panel?.classList.add("active");
@@ -69,7 +105,9 @@ document.querySelectorAll<HTMLButtonElement>(".tab").forEach((tab) => {
 
 document.querySelectorAll<HTMLButtonElement>(".preview-nav").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".preview-nav").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".preview-nav").forEach((b) => {
+      b.classList.remove("active");
+    });
     btn.classList.add("active");
   });
 });
@@ -91,15 +129,15 @@ function renderFileTable() {
   fileTableBody.innerHTML = files
     .map(
       (f) => `
-    <tr class="status-${f.status}" data-id="${f.id}">
-      <td title="${f.inputPath}">${f.inputPath}</td>
-      <td>${f.inputName}</td>
-      <td>${f.encoding}</td>
-      <td>${statusLabel(f.status)}</td>
-      <td>${f.message}</td>
-      <td>${f.outputName}</td>
-      <td title="${f.outputPath}">${f.outputPath}</td>
-    </tr>`
+    <tr class="status-${escHtml(f.status)}" data-id="${escHtml(f.id)}">
+      <td title="${escHtml(f.inputPath)}">${escHtml(f.inputPath)}</td>
+      <td>${escHtml(f.inputName)}</td>
+      <td>${escHtml(f.encoding)}</td>
+      <td>${escHtml(statusLabel(f.status))}</td>
+      <td>${escHtml(f.message)}</td>
+      <td>${escHtml(f.outputName)}</td>
+      <td title="${escHtml(f.outputPath)}">${escHtml(f.outputPath)}</td>
+    </tr>`,
     )
     .join("");
   updateCounts();
@@ -113,10 +151,6 @@ function statusLabel(s: string): string {
     error: "錯誤",
   };
   return map[s] ?? s;
-}
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 10);
 }
 
 // --- Open Files ---
@@ -142,13 +176,15 @@ async function openFiles() {
     files = [...files, ...newFiles];
     renderFileTable();
   } catch (err) {
-    console.error("Failed to open files:", err);
+    showError(`開啟檔案失敗：${String(err)}`);
   }
 }
 
 // --- Convert All ---
 
 async function convertAll() {
+  if (isConverting) return;
+
   const converter = converterEl.value;
   if (converter.startsWith("_")) return;
 
@@ -166,19 +202,20 @@ async function convertAll() {
   for (const [name, val] of Object.entries(moduleSettings)) {
     if (val === "enable") moduleOverrides[name] = 1;
     else if (val === "disable") moduleOverrides[name] = 0;
-    // "auto" = -1 or omit
   }
 
-  for (const file of pendingFiles) {
-    files = files.map((f) =>
-      f.id === file.id ? { ...f, status: "converting" as const, message: "" } : f
-    );
-    renderFileTable();
+  isConverting = true;
+  convertBtn.setAttribute("disabled", "true");
 
-    try {
-      const result: { outputName: string; outputPath: string } = await invoke(
-        "convert_file",
-        {
+  try {
+    for (const file of pendingFiles) {
+      files = files.map((f) =>
+        f.id === file.id ? { ...f, status: "converting" as const, message: "" } : f,
+      );
+      renderFileTable();
+
+      try {
+        const result: { outputName: string; outputPath: string } = await invoke("convert_file", {
           inputPath: `${file.inputPath}/${file.inputName}`,
           converter,
           saveFolder: saveFolderEl.value,
@@ -187,28 +224,29 @@ async function convertAll() {
           postReplace,
           protectReplace,
           modules: JSON.stringify(moduleOverrides),
-        }
-      );
+        });
 
-      files = files.map((f) =>
-        f.id === file.id
-          ? {
-              ...f,
-              status: "success" as const,
-              message: "轉換完成",
-              outputName: result.outputName,
-              outputPath: result.outputPath,
-            }
-          : f
-      );
-    } catch (err) {
-      files = files.map((f) =>
-        f.id === file.id
-          ? { ...f, status: "error" as const, message: String(err) }
-          : f
-      );
+        files = files.map((f) =>
+          f.id === file.id
+            ? {
+                ...f,
+                status: "success" as const,
+                message: "轉換完成",
+                outputName: result.outputName,
+                outputPath: result.outputPath,
+              }
+            : f,
+        );
+      } catch (err) {
+        files = files.map((f) =>
+          f.id === file.id ? { ...f, status: "error" as const, message: String(err) } : f,
+        );
+      }
+      renderFileTable();
     }
-    renderFileTable();
+  } finally {
+    isConverting = false;
+    convertBtn.removeAttribute("disabled");
   }
 }
 
@@ -221,7 +259,7 @@ async function loadServiceInfo() {
     moduleData = info.modules;
     renderModuleCategories();
   } catch (err) {
-    console.error("Failed to load service info:", err);
+    showError(`載入服務資訊失敗：${String(err)}`);
   }
 }
 
@@ -231,7 +269,7 @@ function renderModuleCategories() {
   container.innerHTML = categories
     .map(
       (c, i) =>
-        `<div class="module-category${i === 0 ? " active" : ""}" data-category="${c}">${c}</div>`
+        `<div class="module-category${i === 0 ? " active" : ""}" data-category="${escHtml(c)}">${escHtml(c)}</div>`,
     )
     .join("");
 
@@ -242,9 +280,9 @@ function renderModuleCategories() {
 
   container.querySelectorAll<HTMLDivElement>(".module-category").forEach((el) => {
     el.addEventListener("click", () => {
-      container
-        .querySelectorAll(".module-category")
-        .forEach((c) => c.classList.remove("active"));
+      container.querySelectorAll(".module-category").forEach((c) => {
+        c.classList.remove("active");
+      });
       el.classList.add("active");
       activeCategory = el.dataset.category ?? "";
       renderModuleList();
@@ -259,14 +297,14 @@ function renderModuleList() {
     .map(
       (m) => `
     <div class="module-item">
-      <select data-module="${m.name}">
+      <select data-module="${escHtml(m.name)}">
         <option value="auto"${(moduleSettings[m.name] ?? "auto") === "auto" ? " selected" : ""}>自動偵測</option>
         <option value="enable"${moduleSettings[m.name] === "enable" ? " selected" : ""}>啟用</option>
         <option value="disable"${moduleSettings[m.name] === "disable" ? " selected" : ""}>停用</option>
       </select>
-      <span class="module-name">${m.name}</span>
-      <span class="module-desc">${m.description}</span>
-    </div>`
+      <span class="module-name">${escHtml(m.name)}</span>
+      <span class="module-desc">${escHtml(m.description)}</span>
+    </div>`,
     )
     .join("");
 
@@ -281,7 +319,7 @@ function renderModuleList() {
 // --- Button handlers ---
 
 $<HTMLButtonElement>("#btn-open").addEventListener("click", openFiles);
-$<HTMLButtonElement>("#btn-convert-all").addEventListener("click", convertAll);
+convertBtn.addEventListener("click", convertAll);
 
 $<HTMLButtonElement>("#btn-remove-all").addEventListener("click", () => {
   files = [];
@@ -295,9 +333,19 @@ $<HTMLButtonElement>("#btn-remove-done").addEventListener("click", () => {
 
 $<HTMLButtonElement>("#btn-reset-errors").addEventListener("click", () => {
   files = files.map((f) =>
-    f.status === "error" ? { ...f, status: "pending" as const, message: "" } : f
+    f.status === "error" ? { ...f, status: "pending" as const, message: "" } : f,
   );
   renderFileTable();
+});
+
+// --- External links ---
+
+document.querySelectorAll<HTMLAnchorElement>("a[data-href]").forEach((a) => {
+  a.addEventListener("click", (e) => {
+    e.preventDefault();
+    const url = a.dataset.href;
+    if (url) openUrl(url);
+  });
 });
 
 // --- Drag & Drop ---
@@ -308,10 +356,10 @@ document.addEventListener("dragover", (e) => {
 
 document.addEventListener("drop", async (e) => {
   e.preventDefault();
-  // Tauri handles file drops through events - this is a fallback
 });
 
 // --- Init ---
 
 loadServiceInfo();
 renderFileTable();
+checkForUpdates(true);
