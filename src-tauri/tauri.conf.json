@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/nicedoc/tauri/refs/heads/v2/crates/tauri-schema-generator/schemas/config.schema.json",
+  "$schema": "https://schema.tauri.app/config/2",
   "productName": "繁化姬",
   "version": "1.0.0",
   "identifier": "org.zhconvert.fanhuaji",
@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; connect-src https://api.zhconvert.org; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'"
     }
   },
   "bundle": {

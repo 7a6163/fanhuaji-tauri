@@ -13,8 +13,8 @@
 
 ## 系統需求
 
-- [Node.js](https://nodejs.org/) >= 18
-- [Rust](https://www.rust-lang.org/tools/install) >= 1.70
+- [Node.js](https://nodejs.org/) >= 24
+- [Rust](https://www.rust-lang.org/tools/install) >= 1.85
 - Tauri 2 系統相依套件（參考 [Tauri 官方文件](https://v2.tauri.app/start/prerequisites/)）
 
 ## 開發
