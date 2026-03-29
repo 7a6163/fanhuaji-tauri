@@ -342,8 +342,12 @@ getCurrentWebviewWindow().onDragDropEvent((event) => {
       files = [...files, ...newFiles];
       renderFileTable();
       // Switch to file list tab
-      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+      document.querySelectorAll(".tab").forEach((t) => {
+        t.classList.remove("active");
+      });
+      document.querySelectorAll(".tab-panel").forEach((p) => {
+        p.classList.remove("active");
+      });
       document.querySelector('[data-tab="file-list"]')?.classList.add("active");
       document.getElementById("tab-file-list")?.classList.add("active");
     }
