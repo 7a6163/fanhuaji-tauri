@@ -2,6 +2,12 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.0.2] - 2026-03-29
+
+### Fixed
+
+- 主題切換按鈕在淺色/深色模式下配色不一致
+
 ## [2.0.0] - 2026-03-29
 
 ### Added

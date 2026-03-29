@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof -ti:1420)",
+      "Bash(xargs kill:*)"
+    ]
+  }
+}

@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "fanhuaji-tauri"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "quick-xml 0.36.2",
  "reqwest 0.12.28",
