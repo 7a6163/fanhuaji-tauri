@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  type FileEntry,
   buildModuleOverrides,
   countByStatus,
   escHtml,
+  type FileEntry,
   parseFilePath,
   removeCompleted,
   resetErrors,

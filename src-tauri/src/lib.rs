@@ -447,11 +447,7 @@ mod tests {
     #[test]
     fn output_name_overwrite() {
         let input = Path::new("/tmp/test.srt");
-        let name = input
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+        let name = input.file_name().unwrap().to_string_lossy().to_string();
         assert_eq!(name, "test.srt");
     }
 
