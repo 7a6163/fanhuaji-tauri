@@ -657,7 +657,7 @@ tr.status-error td {
 .theme-options {
   display: flex;
   gap: 0;
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -668,8 +668,8 @@ tr.status-error td {
   gap: 4px;
   padding: 6px 14px;
   border: none;
-  border-right: 1px solid var(--border-light);
-  background: var(--bg);
+  border-right: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text-muted);
   font-size: 12px;
   cursor: pointer;
