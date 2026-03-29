@@ -183,30 +183,30 @@ fn parse_modules(data: &ServiceInfoData) -> Vec<ModuleInfo> {
         .unwrap_or_default();
 
     let mut modules = Vec::new();
-    if let Some(mods) = &data.modules {
-        if let Some(obj) = mods.as_object() {
-            for (key, val) in obj {
-                let name = val
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(key)
-                    .to_string();
-                let desc = val
-                    .get("desc")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default()
-                    .to_string();
-                let cat_id = val.get("cat").and_then(|v| v.as_str()).unwrap_or("unknown");
-                let category = category_names
-                    .get(cat_id)
-                    .cloned()
-                    .unwrap_or_else(|| "未知".to_string());
-                modules.push(ModuleInfo {
-                    name,
-                    description: desc,
-                    category,
-                });
-            }
+    if let Some(mods) = &data.modules
+        && let Some(obj) = mods.as_object()
+    {
+        for (key, val) in obj {
+            let name = val
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(key)
+                .to_string();
+            let desc = val
+                .get("desc")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let cat_id = val.get("cat").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let category = category_names
+                .get(cat_id)
+                .cloned()
+                .unwrap_or_else(|| "未知".to_string());
+            modules.push(ModuleInfo {
+                name,
+                description: desc,
+                category,
+            });
         }
     }
     modules
