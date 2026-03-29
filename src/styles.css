@@ -683,9 +683,8 @@ tr.status-error td {
 }
 
 .theme-options {
-  display: flex;
+  display: inline-flex;
   gap: 0;
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -695,25 +694,31 @@ tr.status-error td {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  border: none;
-  border-right: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-right: none;
   background: var(--surface);
   color: var(--text-muted);
   font-size: 12px;
   cursor: pointer;
 }
 
-.theme-option:last-child {
-  border-right: none;
+.theme-option:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
 }
 
-.theme-option:hover {
+.theme-option:last-child {
+  border-right: 1px solid var(--border);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.theme-option:hover:not(.active) {
   background: var(--hover-subtle);
   color: var(--text);
 }
 
 .theme-option.active {
   background: var(--accent-blue);
+  border-color: var(--accent-blue);
   color: #fff;
 }
 
