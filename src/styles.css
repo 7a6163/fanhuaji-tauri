@@ -687,6 +687,7 @@ tr.status-error td {
   gap: 0;
   border-radius: var(--radius);
   overflow: hidden;
+  border: 1px solid #c0c0c0;
 }
 
 .theme-option {
@@ -694,32 +695,60 @@ tr.status-error td {
   align-items: center;
   gap: 4px;
   padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-right: none;
-  background: var(--surface);
-  color: var(--text-muted);
+  border: none;
+  border-right: 1px solid #c0c0c0;
+  background: #f5f5f5;
+  color: #666;
   font-size: 12px;
   cursor: pointer;
 }
 
-.theme-option:first-child {
-  border-radius: var(--radius) 0 0 var(--radius);
-}
-
 .theme-option:last-child {
-  border-right: 1px solid var(--border);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-right: none;
 }
 
 .theme-option:hover:not(.active) {
-  background: var(--hover-subtle);
-  color: var(--text);
+  background: #e8e8e8;
+  color: #333;
 }
 
 .theme-option.active {
   background: var(--accent-blue);
   border-color: var(--accent-blue);
   color: #fff;
+}
+
+[data-theme="dark"] .theme-option,
+[data-theme="system"] .theme-option {
+  background: #3a3a3a;
+  border-color: #555;
+  color: #aaa;
+}
+
+[data-theme="dark"] .theme-options,
+[data-theme="system"] .theme-options {
+  border-color: #555;
+}
+
+[data-theme="dark"] .theme-option:hover:not(.active),
+[data-theme="system"] .theme-option:hover:not(.active) {
+  background: #444;
+  color: #ddd;
+}
+
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] .theme-option {
+    background: #f5f5f5;
+    border-color: #c0c0c0;
+    color: #666;
+  }
+  [data-theme="system"] .theme-options {
+    border-color: #c0c0c0;
+  }
+  [data-theme="system"] .theme-option:hover:not(.active) {
+    background: #e8e8e8;
+    color: #333;
+  }
 }
 
 .theme-option .ti {
