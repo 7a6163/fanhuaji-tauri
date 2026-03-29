@@ -542,7 +542,11 @@ textarea:focus {
   display: inline-flex;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid #ccc;
+}
+
+[data-theme="dark"] .theme-options {
+  border-color: #555;
 }
 
 .theme-option {
@@ -551,12 +555,18 @@ textarea:focus {
   gap: 4px;
   padding: 6px 14px;
   border: none;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
+  border-right: 1px solid #ccc;
+  background: #fff;
+  color: #333;
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
+}
+
+[data-theme="dark"] .theme-option {
+  background: #3a3a3c;
+  border-color: #555;
+  color: #e5e5e7;
 }
 
 .theme-option:last-child {
@@ -564,7 +574,11 @@ textarea:focus {
 }
 
 .theme-option:hover:not(.active) {
-  background: var(--hover);
+  background: #f0f0f0;
+}
+
+[data-theme="dark"] .theme-option:hover:not(.active) {
+  background: #48484a;
 }
 
 .theme-option.active {
