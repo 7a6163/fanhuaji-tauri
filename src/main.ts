@@ -1,5 +1,6 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { initTheme } from "./theme";
 import { initUpdater } from "./updater";
@@ -181,14 +182,16 @@ async function convertAll() {
 
       try {
         const result: { outputName: string; outputPath: string } = await invoke("convert_file", {
-          inputPath: `${file.inputPath}/${file.inputName}`,
-          converter,
-          saveFolder: saveFolderEl.value,
-          naming: namingEl.value,
-          preReplace,
-          postReplace,
-          protectReplace,
-          modules: JSON.stringify(moduleOverrides),
+          params: {
+            inputPath: `${file.inputPath}/${file.inputName}`,
+            converter,
+            saveFolder: saveFolderEl.value,
+            naming: namingEl.value,
+            preReplace,
+            postReplace,
+            protectReplace,
+            modules: JSON.stringify(moduleOverrides),
+          },
         });
 
         files = files.map((f) =>
@@ -313,12 +316,40 @@ document.querySelectorAll<HTMLAnchorElement>("a[data-href]").forEach((a) => {
 
 // --- Drag & Drop ---
 
-document.addEventListener("dragover", (e) => {
-  e.preventDefault();
-});
+const dropOverlay = document.getElementById("drop-overlay");
 
-document.addEventListener("drop", async (e) => {
-  e.preventDefault();
+getCurrentWebviewWindow().onDragDropEvent((event) => {
+  const { type } = event.payload;
+  if (type === "enter" || type === "over") {
+    dropOverlay?.classList.add("visible");
+  } else if (type === "drop") {
+    dropOverlay?.classList.remove("visible");
+    if ("paths" in event.payload) {
+      const paths: string[] = event.payload.paths;
+      const newFiles: FileEntry[] = paths.map((path) => {
+        const { dir, name } = parseFilePath(path);
+        return {
+          id: crypto.randomUUID(),
+          inputPath: dir,
+          inputName: name,
+          encoding: "UTF-8",
+          status: "pending" as const,
+          message: "",
+          outputName: "",
+          outputPath: "",
+        };
+      });
+      files = [...files, ...newFiles];
+      renderFileTable();
+      // Switch to file list tab
+      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+      document.querySelector('[data-tab="file-list"]')?.classList.add("active");
+      document.getElementById("tab-file-list")?.classList.add("active");
+    }
+  } else if (type === "leave") {
+    dropOverlay?.classList.remove("visible");
+  }
 });
 
 // --- Init ---
