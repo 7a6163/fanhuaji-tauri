@@ -2,6 +2,46 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [1.1.0] - 2026-03-29
+
+### Added
+
+- 設定 tab：主題切換（系統 / 淺色 / 深色）、檢查更新、關於資訊
+- 拖放檔案支援（拖放到視窗自動加入檔案清單）
+- 應用程式內自動更新（tauri-plugin-updater）
+- 動態版本號顯示（標題欄 + 設定頁從 Tauri config 讀取）
+- CI/CD：GitHub Actions 跨平台自動建置（macOS universal、Windows、Linux x86_64/ARM64）
+- 測試：87 個測試（52 TypeScript + 35 Rust），TypeScript 97% 行覆蓋率
+- Codecov 覆蓋率追蹤整合
+- CI 和 Codecov badge 加入 README
+
+### Fixed
+
+- 檔案清單表格不再擠壓右側操作按鈕
+- 主題切換按鈕在淺色/深色模式下正確顯示
+- 轉換功能參數傳遞修正（convert_file params wrapping）
+- URL 白名單驗證，防止 open-redirect 攻擊
+- 路徑穿越防護改進：從 canonical 目錄建構輸出路徑
+- escHtml 加入單引號轉義
+- Theme data-attribute 加入 runtime 驗證（移除不安全的 as cast）
+- initVersion 加入錯誤處理
+- 浮動 Promise 標記 void
+
+### Changed
+
+- 商業使用提示文字改為「商業使用請參閱繁化姬授權條款」
+- productName 改為 ASCII（Fanhuaji）確保跨平台檔名正確
+- countByStatus 改為單次遍歷（效能優化）
+- Rust 程式碼提取純函式（build_output_name、build_api_params、parse_modules）
+- tab 切換邏輯抽出 activateTab 工具函式
+- GitHub Actions 升級至 v5 + Node.js 24
+
+### Security
+
+- 加入 URL 白名單（isSafeUrl），僅允許 zhconvert.org、docs.zhconvert.org、github.com
+- 輸出路徑改為從 canonical 目錄建構，fail closed
+- escHtml 補上單引號轉義，防止屬性注入
+
 ## [1.0.0] - 2026-03-28
 
 ### Added
@@ -14,6 +54,5 @@
 - 自訂取代規則：轉換前取代、轉換後取代、保護詞彙
 - 檔案預覽面板（檔案資訊、輸入預覽、輸出預覽、差異比較、轉換資訊）
 - 彈性存檔選項：自動命名、覆蓋原檔、加入後綴
-- 拖放檔案支援
 - 狀態列即時顯示全部 / 待轉換 / 成功 / 錯誤數量
 - 原生檔案選擇對話框（tauri-plugin-dialog）

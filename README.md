@@ -11,9 +11,8 @@
 
 | 平台 | 架構 | 格式 |
 |------|------|------|
-| macOS | Apple Silicon (aarch64) | `.dmg` |
-| macOS | Intel (x86_64) | `.dmg` |
-| Windows | x86_64 | `.msi` / `.exe` |
+| macOS | Universal (Apple Silicon + Intel) | `.dmg` |
+| Windows | x86_64 | `.exe` (NSIS) |
 | Linux | x86_64 | `.AppImage` / `.deb` |
 | Linux | ARM64 (aarch64) | `.AppImage` / `.deb` |
 
