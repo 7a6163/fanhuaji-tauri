@@ -53,7 +53,9 @@ jobs:
         run: cargo fmt --check
       - name: Test with coverage
         working-directory: src-tauri
-        run: cargo llvm-cov --lcov --output-path ../coverage/lcov-rust.info
+        run: |
+          mkdir -p ../coverage
+          cargo llvm-cov --lcov --output-path ../coverage/lcov-rust.info
       - uses: codecov/codecov-action@v5
         with:
           files: coverage/lcov-rust.info
