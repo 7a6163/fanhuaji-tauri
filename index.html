@@ -1,198 +1,137 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-theme="system">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>繁化姬</title>
-    <link rel="stylesheet" href="/node_modules/@tabler/icons-webfont/dist/tabler-icons.min.css" />
-    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <div class="app">
       <!-- Header -->
       <header class="header">
-        <div class="header-group info-group">
-          <span class="group-title">繁化姬</span>
-          <div class="group-content">
-            <span>伺服器</span>
-            <a id="server-url" class="link" href="#">https://api.zhconvert.org</a>
-            <span>資料庫版本</span>
-            <span id="dict-version" class="dict-version"></span>
-          </div>
-          <div class="group-footer">
-            本程式使用了<a class="link" data-href="https://zhconvert.org">繁化姬</a>的 API 服務。<a class="link" data-href="https://docs.zhconvert.org/license/">商業使用請參閱繁化姬授權條款</a>。
-          </div>
-        </div>
-        <div class="header-group converter-group">
-          <span class="group-title">轉換</span>
-          <div class="group-content">
-            <select id="converter">
-              <optgroup label="繁簡">
-                <option value="Traditional">繁體化</option>
-                <option value="Simplified">簡體化</option>
-              </optgroup>
-              <optgroup label="本地化">
-                <option value="China">中國化</option>
-                <option value="Hongkong">香港化</option>
-                <option value="Taiwan" selected>台灣化</option>
-              </optgroup>
-              <optgroup label="其他">
-                <option value="Bopomofo">注音化</option>
-                <option value="Mars">火星化</option>
-                <option value="Pinyin">拼音化</option>
-              </optgroup>
-              <optgroup label="第三方服務">
-                <option value="WikiSimplified">維基簡體化</option>
-                <option value="WikiTraditional">維基繁體化</option>
-              </optgroup>
-              <optgroup label="App 限定模式">
-                <option value="_encodingOnly">僅轉換字符編碼</option>
-                <option value="_renameOnly">僅修改檔案名稱</option>
-              </optgroup>
-            </select>
-          </div>
-        </div>
+        <span class="app-title">繁化姬</span>
+        <button type="button" id="btn-settings" class="icon-btn" title="設定">
+          <i class="ti ti-settings"></i>
+        </button>
       </header>
 
-      <!-- Tabs -->
-      <nav class="tabs">
-        <button type="button" class="tab active" data-tab="file-list">檔案清單</button>
-        <button type="button" class="tab" data-tab="save-options">存檔選項</button>
-        <button type="button" class="tab" data-tab="modules">詞語模組</button>
-        <button type="button" class="tab" data-tab="custom-replace">自訂取代</button>
-        <button type="button" class="tab" data-tab="file-preview">檔案預覽</button>
-        <button type="button" class="tab" data-tab="settings">設定</button>
-      </nav>
-
-      <!-- Tab Content -->
-      <div class="tab-content">
-        <!-- 檔案清單 -->
-        <div id="tab-file-list" class="tab-panel active">
-          <div class="file-list-layout">
-            <div class="table-container">
-              <table id="file-table">
-                <thead>
-                  <tr>
-                    <th>輸入路徑</th>
-                    <th>輸入檔名</th>
-                    <th>字元編碼</th>
-                    <th>狀態</th>
-                    <th>系統訊息</th>
-                    <th>輸出檔名</th>
-                    <th>輸出路徑</th>
-                  </tr>
-                </thead>
-                <tbody id="file-table-body">
-                </tbody>
-              </table>
-            </div>
-            <div class="file-actions">
-              <button type="button" id="btn-open" class="action-btn">
-                <i class="ti ti-folder-open"></i>開啟檔案…
-              </button>
-              <button type="button" id="btn-remove-all" class="action-btn">
-                <i class="ti ti-trash"></i>刪除所有
-              </button>
-              <button type="button" id="btn-remove-done" class="action-btn">
-                <i class="ti ti-circle-check"></i>刪除已完成
-              </button>
-              <button type="button" id="btn-reset-errors" class="action-btn">
-                <i class="ti ti-refresh"></i>重設錯誤
-              </button>
-              <button type="button" id="btn-convert-all" class="action-btn convert-btn">
-                <i class="ti ti-transform"></i>轉換所有
-              </button>
-            </div>
-          </div>
+      <!-- Main content -->
+      <main class="main">
+        <!-- Empty state: drop zone -->
+        <div id="drop-zone" class="drop-zone" role="button" tabindex="0">
+          <i class="ti ti-cloud-upload"></i>
+          <span class="drop-title">拖放檔案到此處</span>
+          <span class="drop-subtitle">或 點擊開啟檔案</span>
+          <span class="drop-formats">支援 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB</span>
         </div>
 
-        <!-- 存檔選項 -->
-        <div id="tab-save-options" class="tab-panel">
-          <div class="options-form">
-            <div class="form-row">
-              <label>存檔資料夾</label>
+        <!-- File list (shown when files exist) -->
+        <div id="file-list" class="file-list hidden">
+          <div id="file-items" class="file-items"></div>
+          <button type="button" id="btn-add-more" class="add-more-btn">
+            <i class="ti ti-plus"></i>加入更多檔案
+          </button>
+        </div>
+      </main>
+
+      <!-- Progress bar -->
+      <div id="progress-bar-container" class="progress-bar-container">
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+
+      <!-- Status bar -->
+      <footer id="status-bar" class="status-bar hidden">
+        <span class="status-badge blue">全部: <span id="count-total">0</span></span>
+        <span class="status-badge green">完成: <span id="count-success">0</span></span>
+        <span class="status-badge red">錯誤: <span id="count-error">0</span></span>
+        <span class="status-spacer"></span>
+        <button type="button" id="btn-clear" class="status-action">清除列表</button>
+        <button type="button" id="btn-retry" class="status-action hidden">重試失敗</button>
+      </footer>
+
+      <!-- Settings drawer -->
+      <div id="settings-backdrop" class="settings-backdrop hidden"></div>
+      <aside id="settings-drawer" class="settings-drawer hidden">
+        <div class="drawer-header">
+          <h2>設定</h2>
+          <button type="button" id="btn-close-settings" class="icon-btn">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <nav class="drawer-tabs">
+          <button type="button" class="drawer-tab active" data-drawer-tab="convert">轉換</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="replace">取代</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="modules">模組</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="general">一般</button>
+        </nav>
+        <div class="drawer-body">
+          <!-- 轉換 -->
+          <div class="drawer-panel active" data-panel="convert">
+            <section class="setting-section">
+              <h3><i class="ti ti-transform"></i> 轉換模式</h3>
+              <select id="converter">
+                <optgroup label="繁簡">
+                  <option value="Traditional">繁體化</option>
+                  <option value="Simplified">簡體化</option>
+                </optgroup>
+                <optgroup label="本地化">
+                  <option value="China">中國化</option>
+                  <option value="Hongkong">香港化</option>
+                  <option value="Taiwan" selected>台灣化</option>
+                </optgroup>
+                <optgroup label="其他">
+                  <option value="Bopomofo">注音化</option>
+                  <option value="Mars">火星化</option>
+                  <option value="Pinyin">拼音化</option>
+                </optgroup>
+                <optgroup label="第三方服務">
+                  <option value="WikiSimplified">維基簡體化</option>
+                  <option value="WikiTraditional">維基繁體化</option>
+                </optgroup>
+              </select>
+            </section>
+            <section class="setting-section">
+              <h3><i class="ti ti-folder"></i> 存檔選項</h3>
+              <label class="setting-label">存檔資料夾</label>
               <select id="save-folder">
                 <option value="same">輸入檔所在資料夾</option>
                 <option value="custom">自訂資料夾…</option>
               </select>
-            </div>
-            <hr />
-            <div class="form-row">
-              <label>命名方式</label>
+              <label class="setting-label">命名方式</label>
               <select id="naming">
                 <option value="auto">自動命名</option>
                 <option value="overwrite">覆蓋原檔</option>
                 <option value="suffix">加入後綴</option>
               </select>
-            </div>
+            </section>
           </div>
-        </div>
 
-        <!-- 詞語模組 -->
-        <div id="tab-modules" class="tab-panel">
-          <div class="modules-header">
-            <select id="module-default">
-              <option value="auto">自動偵測</option>
-              <option value="enable">全部啟用</option>
-              <option value="disable">全部停用</option>
-            </select>
-            <button type="button" id="btn-global-setting" class="text-btn">全域設定</button>
-            <button type="button" id="btn-apply-all" class="text-btn">一次設定所有選項</button>
+          <!-- 取代 -->
+          <div class="drawer-panel" data-panel="replace">
+            <section class="setting-section">
+              <h3><i class="ti ti-replace"></i> 自訂取代</h3>
+              <label class="setting-label">轉換前取代</label>
+              <textarea id="pre-replace" placeholder="搜尋=取代（每行一組）" rows="4"></textarea>
+              <label class="setting-label">轉換後取代</label>
+              <textarea id="post-replace" placeholder="搜尋=取代（每行一組）" rows="4"></textarea>
+              <label class="setting-label">保護詞彙（不轉換）</label>
+              <textarea id="protect-replace" placeholder="每行一個詞彙" rows="4"></textarea>
+            </section>
           </div>
-          <div class="modules-layout">
-            <div class="module-categories" id="module-categories">
-            </div>
-            <div class="module-list" id="module-list">
-            </div>
-          </div>
-        </div>
 
-        <!-- 自訂取代 -->
-        <div id="tab-custom-replace" class="tab-panel">
-          <div class="replace-section">
-            <h3>轉換前取代（Pre-Replace）</h3>
-            <textarea id="pre-replace" placeholder="格式：搜尋=取代（每行一組）" rows="5"></textarea>
+          <!-- 模組 -->
+          <div class="drawer-panel" data-panel="modules">
+            <section class="setting-section">
+              <h3><i class="ti ti-puzzle"></i> 詞語模組</h3>
+              <div id="module-categories" class="module-categories"></div>
+              <div id="module-list" class="module-list"></div>
+            </section>
           </div>
-          <div class="replace-section">
-            <h3>轉換後取代（Post-Replace）</h3>
-            <textarea id="post-replace" placeholder="格式：搜尋=取代（每行一組）" rows="5"></textarea>
-          </div>
-          <div class="replace-section">
-            <h3>保護詞彙（不轉換）</h3>
-            <textarea id="protect-replace" placeholder="每行一個詞彙" rows="5"></textarea>
-          </div>
-        </div>
 
-        <!-- 檔案預覽 -->
-        <div id="tab-file-preview" class="tab-panel">
-          <div class="preview-sidebar">
-            <button type="button" class="preview-nav active" data-preview="file-info">
-              <i class="ti ti-info-circle"></i>檔案資訊
-            </button>
-            <button type="button" class="preview-nav" data-preview="input-preview">
-              <i class="ti ti-file-import"></i>輸入檔案預覽
-            </button>
-            <button type="button" class="preview-nav" data-preview="output-preview">
-              <i class="ti ti-file-export"></i>輸出檔案預覽
-            </button>
-            <button type="button" class="preview-nav" data-preview="diff-view">
-              <i class="ti ti-arrows-diff"></i>差異比較
-            </button>
-            <button type="button" class="preview-nav" data-preview="convert-info">
-              <i class="ti ti-list-details"></i>轉換資訊
-            </button>
-          </div>
-          <div class="preview-content" id="preview-content">
-            <p class="placeholder-text">在檔案清單內雙擊字幕以獲得輸入檔案資訊</p>
-          </div>
-        </div>
-
-        <!-- 設定 -->
-        <div id="tab-settings" class="tab-panel">
-          <div class="settings-form">
-            <h3><i class="ti ti-palette"></i> 外觀</h3>
-            <div class="setting-row">
-              <label>主題</label>
+          <!-- 一般 -->
+          <div class="drawer-panel" data-panel="general">
+            <section class="setting-section">
+              <h3><i class="ti ti-palette"></i> 外觀</h3>
               <div class="theme-options" id="theme-options">
                 <button type="button" class="theme-option active" data-theme="system">
                   <i class="ti ti-device-desktop"></i>系統
@@ -204,60 +143,26 @@
                   <i class="ti ti-moon"></i>深色
                 </button>
               </div>
-            </div>
-
-            <hr />
-
-            <h3><i class="ti ti-refresh"></i> 更新</h3>
-            <div class="setting-row">
-              <label>應用程式更新</label>
-              <div class="setting-actions">
-                <button type="button" id="btn-check-update" class="action-btn">
-                  <i class="ti ti-cloud-download"></i>檢查更新
-                </button>
-                <span id="update-status" class="setting-hint"></span>
-              </div>
-            </div>
-
-            <hr />
-
-            <h3><i class="ti ti-info-circle"></i> 關於</h3>
-            <div class="setting-row">
-              <label>版本</label>
-              <span id="app-version" class="setting-value"></span>
-            </div>
-            <div class="setting-row">
-              <label>繁化姬 API</label>
-              <span class="setting-value">
+            </section>
+            <section class="setting-section">
+              <h3><i class="ti ti-refresh"></i> 更新</h3>
+              <button type="button" id="btn-check-update" class="action-btn">
+                <i class="ti ti-cloud-download"></i>檢查更新
+              </button>
+              <span id="update-status" class="update-status"></span>
+            </section>
+            <section class="setting-section">
+              <h3><i class="ti ti-info-circle"></i> 關於</h3>
+              <div class="about-info">
+                <span>版本 <span id="app-version"></span></span>
                 <a class="link" data-href="https://zhconvert.org">zhconvert.org</a>
-              </span>
-            </div>
-            <div class="setting-row">
-              <label>服務條款</label>
-              <span class="setting-value">
-                <a class="link" data-href="https://docs.zhconvert.org/license/">docs.zhconvert.org/license</a>
-              </span>
-            </div>
-            <div class="setting-row">
-              <label>原始碼</label>
-              <span class="setting-value">
+                <a class="link" data-href="https://docs.zhconvert.org/license/">授權條款</a>
                 <a class="link" data-href="https://github.com/7a6163/fanhuaji-tauri">GitHub</a>
-              </span>
-            </div>
+              </div>
+            </section>
           </div>
         </div>
-      </div>
-
-      <!-- Drop overlay -->
-      <div id="drop-overlay" class="drop-overlay">拖放檔案到此處</div>
-
-      <!-- Status Bar -->
-      <footer class="status-bar">
-        <span class="status-badge blue">全部: <span id="count-total">0</span></span>
-        <span class="status-badge yellow">待轉換: <span id="count-pending">0</span></span>
-        <span class="status-badge green">成功轉換: <span id="count-success">0</span></span>
-        <span class="status-badge red">錯誤: <span id="count-error">0</span></span>
-      </footer>
+      </aside>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

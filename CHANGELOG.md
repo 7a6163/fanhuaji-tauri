@@ -2,6 +2,36 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.0.0] - 2026-03-29
+
+### Added
+
+- 全新極簡 UI：拖入檔案即自動轉換，零點擊操作
+- EPUB 電子書轉換支援（逐章轉換，保留結構/CSS/圖片）
+- EPUB 轉換章節進度即時顯示
+- 設定 drawer（側邊抽屜）分頁：轉換、取代、模組、一般
+- 跨平台字型統一：Inter + Noto Sans TC
+- 跨平台 select 控制項樣式統一（appearance: none）
+- 進度條顯示批次轉換進度
+- 空狀態拖放區引導（支援格式提示）
+- Windows portable ZIP 版本
+- Linux Wayland EGL workaround 自動設定
+
+### Changed
+
+- UI 重新設計：移除 6 個 tab，改為單一主畫面 + 設定 drawer
+- 檔案列表簡化為：檔名 + 狀態圖示 + 訊息
+- 轉換模式移入設定（預設台灣化）
+- 拖放/開啟檔案後自動開始轉換
+- NSIS 安裝模式改為 currentUser（不需管理員權限）
+- CSS 全面改用 CSS 變數，支援 light/dark/system 主題
+
+### Security
+
+- EPUB ZIP 解壓加入路徑穿越防護
+- EPUB 轉換改用 async I/O，避免阻塞 Tokio 執行緒
+- 部分章節失敗改用 warnings 欄位回報，不再污染 output_path
+
 ## [1.1.0] - 2026-03-29
 
 ### Added

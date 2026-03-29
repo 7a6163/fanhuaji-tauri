@@ -26,6 +26,9 @@ export interface FileEntry {
   message: string;
   outputName: string;
   outputPath: string;
+  chapterIndex?: number;
+  chapterTotal?: number;
+  chapterName?: string;
 }
 
 export function parseFilePath(path: string): { dir: string; name: string } {
@@ -79,6 +82,10 @@ export function activateTab(name: string) {
   });
   document.querySelector(`[data-tab="${name}"]`)?.classList.add("active");
   document.getElementById(`tab-${name}`)?.classList.add("active");
+}
+
+export function isEpubFile(filename: string): boolean {
+  return filename.toLowerCase().endsWith(".epub");
 }
 
 export function buildModuleOverrides(settings: Record<string, string>): Record<string, number> {

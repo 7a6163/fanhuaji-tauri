@@ -79,5 +79,19 @@ jobs:
           releaseBody: "See the assets below to download and install."
           releaseDraft: false
           prerelease: false
-          args: --target ${{ matrix.target }} ${{ contains(matrix.platform, 'windows') && '--bundles nsis' || '' }}
+          args: --target ${{ matrix.target }}
           includeUpdaterJson: true
+
+      - name: Create Windows portable ZIP
+        if: contains(matrix.platform, 'windows')
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release" -Filter "Fanhuaji.exe" | Select-Object -First 1
+          if ($exe) {
+            $version = "${{ github.ref_name }}"
+            $zipName = "Fanhuaji-${version}-windows-portable.zip"
+            Compress-Archive -Path $exe.FullName -DestinationPath $zipName
+            gh release upload ${{ github.ref_name }} $zipName --clobber
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

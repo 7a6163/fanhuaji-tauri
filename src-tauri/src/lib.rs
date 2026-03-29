@@ -1,6 +1,9 @@
+mod epub;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use tauri::Emitter;
 use tauri_plugin_dialog::DialogExt;
 
 const API_BASE: &str = "https://api.zhconvert.org";
@@ -61,6 +64,8 @@ struct ServiceInfo {
 struct ConvertFileResult {
     output_name: String,
     output_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    warnings: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -74,6 +79,29 @@ struct ConvertFileParams {
     post_replace: String,
     protect_replace: String,
     modules: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConvertEpubParams {
+    file_id: String,
+    input_path: String,
+    converter: String,
+    save_folder: String,
+    naming: String,
+    pre_replace: String,
+    post_replace: String,
+    protect_replace: String,
+    modules: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EpubProgress {
+    file_id: String,
+    chapter_index: usize,
+    chapter_total: usize,
+    chapter_name: String,
 }
 
 // --- HTTP Client ---
@@ -221,10 +249,10 @@ async fn open_files_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String>
         .dialog()
         .file()
         .add_filter(
-            "文字檔案",
+            "支援檔案",
             &[
                 "txt", "srt", "ass", "ssa", "lrc", "vtt", "sub", "sup", "csv", "tsv", "json",
-                "xml", "html", "htm", "md",
+                "xml", "html", "htm", "md", "epub",
             ],
         )
         .add_filter("所有檔案", &["*"])
@@ -322,6 +350,174 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
     Ok(ConvertFileResult {
         output_name,
         output_path: output_path.to_string_lossy().into_owned(),
+        warnings: None,
+    })
+}
+
+#[tauri::command]
+async fn convert_epub(
+    app: tauri::AppHandle,
+    params: ConvertEpubParams,
+) -> Result<ConvertFileResult, String> {
+    let ConvertEpubParams {
+        file_id,
+        input_path,
+        converter,
+        save_folder,
+        naming,
+        pre_replace,
+        post_replace,
+        protect_replace,
+        modules,
+    } = params;
+
+    let canonical = tokio::fs::canonicalize(&input_path)
+        .await
+        .map_err(|e| format!("無效路徑：{e}"))?;
+
+    let metadata = tokio::fs::metadata(&canonical)
+        .await
+        .map_err(|e| format!("無法讀取檔案資訊：{e}"))?;
+    if metadata.len() > MAX_FILE_BYTES {
+        return Err("檔案過大（上限 50 MB）".to_string());
+    }
+
+    // Extract EPUB
+    let canonical_clone = canonical.clone();
+    let (temp_dir, content_files) =
+        tokio::task::spawn_blocking(move || epub::extract_epub(&canonical_clone))
+            .await
+            .map_err(|e| format!("解壓錯誤：{e}"))??;
+
+    let chapter_total = content_files.len();
+    let client = http_client()?;
+    let url = format!("{API_BASE}/convert");
+    let mut errors: Vec<String> = Vec::new();
+
+    // Convert each chapter
+    for (i, content_file) in content_files.iter().enumerate() {
+        let chapter_name = epub::chapter_display_name(&content_file.relative_path);
+
+        // Emit progress
+        let _ = app.emit(
+            "epub-progress",
+            EpubProgress {
+                file_id: file_id.clone(),
+                chapter_index: i + 1,
+                chapter_total,
+                chapter_name: chapter_name.clone(),
+            },
+        );
+
+        let file_path = temp_dir.path().join(&content_file.relative_path);
+        let xhtml = match tokio::fs::read_to_string(&file_path).await {
+            Ok(s) => s,
+            Err(e) => {
+                errors.push(format!("{chapter_name}: 讀取失敗 ({e})"));
+                continue;
+            }
+        };
+
+        // Extract text
+        let (text, count) = match epub::extract_text(&xhtml) {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("{chapter_name}: {e}"));
+                continue;
+            }
+        };
+
+        if count == 0 {
+            continue; // No text to convert
+        }
+
+        // Call API
+        let api_params = build_api_params(
+            &text,
+            &converter,
+            &pre_replace,
+            &post_replace,
+            &protect_replace,
+            &modules,
+        );
+
+        let resp = match client.post(&url).form(&api_params).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("{chapter_name}: 網路請求失敗 ({e})"));
+                continue;
+            }
+        };
+
+        let api: ApiResponse = match resp.json().await {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("{chapter_name}: 回應解析失敗 ({e})"));
+                continue;
+            }
+        };
+
+        if api.code != 0 {
+            errors.push(format!("{chapter_name}: API 錯誤 ({})", api.msg));
+            continue;
+        }
+
+        let data = match api.data {
+            Some(d) => d,
+            None => {
+                errors.push(format!("{chapter_name}: API 回應缺少 data"));
+                continue;
+            }
+        };
+
+        // Replace text in XHTML
+        let new_xhtml = match epub::replace_text(&xhtml, &data.text) {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("{chapter_name}: {e}"));
+                continue;
+            }
+        };
+
+        if let Err(e) = tokio::fs::write(&file_path, new_xhtml).await {
+            errors.push(format!("{chapter_name}: 寫入失敗 ({e})"));
+            continue;
+        }
+
+        // Small delay between API calls
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    // Determine output path
+    let input = Path::new(&input_path);
+    let dir: PathBuf = match save_folder.as_str() {
+        "same" => input.parent().ok_or("輸入路徑沒有父目錄")?.to_path_buf(),
+        custom => PathBuf::from(custom),
+    };
+
+    let output_name = build_output_name(input, &naming, &converter)?;
+    let canonical_dir = tokio::fs::canonicalize(&dir)
+        .await
+        .map_err(|e| format!("輸出目錄無效：{e}"))?;
+    let output_path = canonical_dir.join(&output_name);
+
+    // Repack EPUB
+    let temp_path = temp_dir.path().to_path_buf();
+    let out_path = output_path.clone();
+    tokio::task::spawn_blocking(move || epub::repack_epub(&temp_path, &out_path))
+        .await
+        .map_err(|e| format!("打包錯誤：{e}"))??;
+
+    let warnings = if errors.is_empty() {
+        None
+    } else {
+        Some(format!("部分章節失敗：{}", errors.join("；")))
+    };
+
+    Ok(ConvertFileResult {
+        output_name,
+        output_path: output_path.to_string_lossy().into_owned(),
+        warnings,
     })
 }
 
@@ -593,6 +789,7 @@ mod tests {
         let result = ConvertFileResult {
             output_name: "test.Taiwan.txt".to_string(),
             output_path: "/tmp/test.Taiwan.txt".to_string(),
+            warnings: None,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["outputName"], "test.Taiwan.txt");
@@ -629,6 +826,7 @@ pub fn run() {
             get_service_info,
             open_files_dialog,
             convert_file,
+            convert_epub,
         ])
         .run(tauri::generate_context!())
         .expect("啟動應用程式時發生錯誤");
