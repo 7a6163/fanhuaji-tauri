@@ -86,12 +86,22 @@ jobs:
         if: contains(matrix.platform, 'windows')
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release" -Filter "*.exe" | Where-Object { $_.Name -notmatch '(setup|uninstall)' } | Select-Object -First 1
+          $relDir = "src-tauri/target/${{ matrix.target }}/release"
+          Write-Host "Looking for exe in: $relDir"
+          Get-ChildItem -Path $relDir -Filter "*.exe" | ForEach-Object { Write-Host "  Found: $($_.Name)" }
+          $exe = Get-ChildItem -Path $relDir -Filter "Fanhuaji.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) {
+            $exe = Get-ChildItem -Path $relDir -Filter "fanhuaji-tauri.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
           if ($exe) {
+            Write-Host "Packaging: $($exe.FullName)"
             $version = "${{ github.ref_name }}"
             $zipName = "Fanhuaji-${version}-windows-portable.zip"
             Compress-Archive -Path $exe.FullName -DestinationPath $zipName
             gh release upload ${{ github.ref_name }} $zipName --clobber
+            Write-Host "Uploaded: $zipName"
+          } else {
+            Write-Host "WARNING: No portable exe found, skipping"
           }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
