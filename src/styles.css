@@ -1,6 +1,5 @@
 /* Light theme (default) */
-:root,
-[data-theme="light"] {
+:root {
   --bg: #ececec;
   --surface: #fff;
   --border: #c0c0c0;
@@ -87,6 +86,35 @@
     --hr-color: var(--border);
     color-scheme: dark;
   }
+}
+
+/* Explicit light override (must come after media query) */
+[data-theme="light"] {
+  --bg: #ececec;
+  --surface: #fff;
+  --border: #c0c0c0;
+  --border-light: #d8d8d8;
+  --text: #333;
+  --text-muted: #666;
+  --link: #0066cc;
+  --accent-blue: #3478f6;
+  --badge-blue: #2962ff;
+  --badge-yellow: #f5a623;
+  --badge-green: #2e7d32;
+  --badge-red: #d32f2f;
+  --tab-bg: #d6d6d6;
+  --tab-active: #ececec;
+  --th-bg: #f0f0f0;
+  --td-border: #eee;
+  --td-border-light: #f0f0f0;
+  --hover-bg: #e8f0fe;
+  --hover-subtle: #f0f0f0;
+  --hover-medium: #e0e0e0;
+  --scrollbar-track: #e8e8e8;
+  --scrollbar-thumb: #bbb;
+  --scrollbar-thumb-hover: #999;
+  --hr-color: var(--text);
+  color-scheme: light;
 }
 
 * {
