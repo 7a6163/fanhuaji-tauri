@@ -552,8 +552,8 @@ textarea:focus {
   padding: 6px 14px;
   border: none;
   border-right: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text-muted);
+  background: var(--surface);
+  color: var(--text);
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
@@ -565,11 +565,11 @@ textarea:focus {
 
 .theme-option:hover:not(.active) {
   background: var(--hover);
-  color: var(--text);
 }
 
 .theme-option.active {
   background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
