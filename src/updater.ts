@@ -42,5 +42,5 @@ export function initUpdater() {
   btn?.addEventListener("click", () => checkForUpdates(false));
 
   // Silent check on startup
-  checkForUpdates(true);
+  void checkForUpdates(true);
 }

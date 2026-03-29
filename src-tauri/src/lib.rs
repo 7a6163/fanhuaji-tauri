@@ -107,7 +107,7 @@ fn build_output_name(input: &Path, naming: &str, converter: &str) -> Result<Stri
             .file_name()
             .ok_or("無法取得檔案名稱")?
             .to_string_lossy()
-            .to_string()),
+            .into_owned()),
         "suffix" => Ok(format!("{stem}.converted.{ext}")),
         _ => {
             let converter_suffix = sanitize_filename_part(converter);
@@ -207,11 +207,7 @@ async fn get_service_info() -> Result<ServiceInfo, String> {
 
     let dict_version = info.revisions.and_then(|r| r.build).unwrap_or_default();
 
-    let mut modules = Vec::new();
-
-    if let Some(data) = &info.data {
-        modules = parse_modules(data);
-    }
+    let modules = info.data.as_ref().map(parse_modules).unwrap_or_default();
 
     Ok(ServiceInfo {
         modules,
@@ -305,30 +301,18 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
 
     // Determine output directory
     let input = Path::new(&input_path);
-    let dir_buf: PathBuf;
-    let dir: &Path = match save_folder.as_str() {
-        "same" => input.parent().unwrap_or(Path::new(".")),
-        custom => {
-            dir_buf = PathBuf::from(custom);
-            &dir_buf
-        }
+    let dir: PathBuf = match save_folder.as_str() {
+        "same" => input.parent().ok_or("輸入路徑沒有父目錄")?.to_path_buf(),
+        custom => PathBuf::from(custom),
     };
 
     let output_name = build_output_name(input, &naming, &data.converter)?;
 
-    let output_path = dir.join(&output_name);
-
-    // Validate output path stays within intended directory
-    let canonical_dir = tokio::fs::canonicalize(dir)
+    // Build output path from canonical directory to prevent traversal
+    let canonical_dir = tokio::fs::canonicalize(&dir)
         .await
         .map_err(|e| format!("輸出目錄無效：{e}"))?;
-    let canonical_out_parent = output_path.parent().ok_or("無法取得輸出目錄")?;
-    let canonical_out_parent = tokio::fs::canonicalize(canonical_out_parent)
-        .await
-        .unwrap_or_else(|_| canonical_out_parent.to_path_buf());
-    if !canonical_out_parent.starts_with(&canonical_dir) {
-        return Err("輸出路徑超出預期目錄".to_string());
-    }
+    let output_path = canonical_dir.join(&output_name);
 
     // Write output
     tokio::fs::write(&output_path, &data.text)
@@ -337,7 +321,7 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
 
     Ok(ConvertFileResult {
         output_name,
-        output_path: output_path.to_string_lossy().to_string(),
+        output_path: output_path.to_string_lossy().into_owned(),
     })
 }
 

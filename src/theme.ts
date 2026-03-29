@@ -1,13 +1,15 @@
 type Theme = "light" | "dark" | "system";
 
 const STORAGE_KEY = "fanhuaji-theme";
+const VALID_THEMES: readonly string[] = ["light", "dark", "system"];
+
+function isValidTheme(value: string | undefined): value is Theme {
+  return typeof value === "string" && VALID_THEMES.includes(value);
+}
 
 function getStoredTheme(): Theme {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "light" || stored === "dark" || stored === "system") {
-    return stored;
-  }
-  return "system";
+  const stored = localStorage.getItem(STORAGE_KEY) ?? undefined;
+  return isValidTheme(stored) ? stored : "system";
 }
 
 function applyTheme(theme: Theme) {
@@ -24,8 +26,8 @@ export function initTheme() {
 
   document.querySelectorAll<HTMLButtonElement>(".theme-option").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const theme = btn.dataset.theme as Theme;
-      if (theme) applyTheme(theme);
+      const value = btn.dataset.theme;
+      if (isValidTheme(value)) applyTheme(value);
     });
   });
 }

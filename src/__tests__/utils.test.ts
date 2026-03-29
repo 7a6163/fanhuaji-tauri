@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  activateTab,
   buildModuleOverrides,
   countByStatus,
   escHtml,
   type FileEntry,
+  isSafeUrl,
   parseFilePath,
   removeCompleted,
   resetErrors,
@@ -39,6 +41,10 @@ describe("escHtml", () => {
 
   it("handles Chinese characters", () => {
     expect(escHtml("繁化姬")).toBe("繁化姬");
+  });
+
+  it("escapes single quotes", () => {
+    expect(escHtml("it's")).toBe("it&#39;s");
   });
 });
 
@@ -202,5 +208,75 @@ describe("buildModuleOverrides", () => {
 
   it("returns empty object for empty input", () => {
     expect(buildModuleOverrides({})).toEqual({});
+  });
+});
+
+// --- activateTab ---
+
+describe("activateTab", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <button class="tab active" data-tab="a">A</button>
+      <button class="tab" data-tab="b">B</button>
+      <div id="tab-a" class="tab-panel active"></div>
+      <div id="tab-b" class="tab-panel"></div>
+    `;
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("switches active tab", () => {
+    activateTab("b");
+    expect(document.querySelector('[data-tab="a"]')?.classList.contains("active")).toBe(false);
+    expect(document.querySelector('[data-tab="b"]')?.classList.contains("active")).toBe(true);
+    expect(document.getElementById("tab-a")?.classList.contains("active")).toBe(false);
+    expect(document.getElementById("tab-b")?.classList.contains("active")).toBe(true);
+  });
+
+  it("handles non-existent tab gracefully", () => {
+    activateTab("nonexistent");
+    expect(document.querySelector('[data-tab="a"]')?.classList.contains("active")).toBe(false);
+  });
+});
+
+// --- isSafeUrl ---
+
+describe("isSafeUrl", () => {
+  it("allows zhconvert.org", () => {
+    expect(isSafeUrl("https://zhconvert.org")).toBe(true);
+  });
+
+  it("allows docs.zhconvert.org subpath", () => {
+    expect(isSafeUrl("https://docs.zhconvert.org/license/")).toBe(true);
+  });
+
+  it("allows github repo", () => {
+    expect(isSafeUrl("https://github.com/7a6163/fanhuaji-tauri")).toBe(true);
+  });
+
+  it("rejects http protocol", () => {
+    expect(isSafeUrl("http://zhconvert.org")).toBe(false);
+  });
+
+  it("rejects unknown domain", () => {
+    expect(isSafeUrl("https://evil.com")).toBe(false);
+  });
+
+  it("rejects file protocol", () => {
+    expect(isSafeUrl("file:///etc/passwd")).toBe(false);
+  });
+
+  it("rejects javascript protocol", () => {
+    expect(isSafeUrl("javascript:alert(1)")).toBe(false);
+  });
+
+  it("rejects invalid URL", () => {
+    expect(isSafeUrl("not-a-url")).toBe(false);
+  });
+
+  it("rejects empty string", () => {
+    expect(isSafeUrl("")).toBe(false);
   });
 });

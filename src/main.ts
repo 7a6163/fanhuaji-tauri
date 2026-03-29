@@ -5,10 +5,12 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { initTheme } from "./theme";
 import { initUpdater } from "./updater";
 import {
+  activateTab,
   buildModuleOverrides,
   countByStatus,
   escHtml,
   type FileEntry,
+  isSafeUrl,
   parseFilePath,
   removeCompleted,
   resetErrors,
@@ -75,15 +77,8 @@ function showError(msg: string) {
 
 document.querySelectorAll<HTMLButtonElement>(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((t) => {
-      t.classList.remove("active");
-    });
-    document.querySelectorAll(".tab-panel").forEach((p) => {
-      p.classList.remove("active");
-    });
-    tab.classList.add("active");
-    const panel = document.getElementById(`tab-${tab.dataset.tab}`);
-    panel?.classList.add("active");
+    const name = tab.dataset.tab;
+    if (name) activateTab(name);
   });
 });
 
@@ -310,7 +305,7 @@ document.querySelectorAll<HTMLAnchorElement>("a[data-href]").forEach((a) => {
   a.addEventListener("click", (e) => {
     e.preventDefault();
     const url = a.dataset.href;
-    if (url) openUrl(url);
+    if (url && isSafeUrl(url)) openUrl(url);
   });
 });
 
@@ -341,15 +336,7 @@ getCurrentWebviewWindow().onDragDropEvent((event) => {
       });
       files = [...files, ...newFiles];
       renderFileTable();
-      // Switch to file list tab
-      document.querySelectorAll(".tab").forEach((t) => {
-        t.classList.remove("active");
-      });
-      document.querySelectorAll(".tab-panel").forEach((p) => {
-        p.classList.remove("active");
-      });
-      document.querySelector('[data-tab="file-list"]')?.classList.add("active");
-      document.getElementById("tab-file-list")?.classList.add("active");
+      activateTab("file-list");
     }
   } else if (type === "leave") {
     dropOverlay?.classList.remove("visible");
@@ -359,14 +346,18 @@ getCurrentWebviewWindow().onDragDropEvent((event) => {
 // --- Init ---
 
 async function initVersion() {
-  const version = await getVersion();
-  const el = document.getElementById("app-version");
-  if (el) el.textContent = version;
-  document.title = `繁化姬 ${version}`;
+  try {
+    const version = await getVersion();
+    const el = document.getElementById("app-version");
+    if (el) el.textContent = version;
+    document.title = `繁化姬 ${version}`;
+  } catch (err) {
+    console.error("Failed to get version:", err);
+  }
 }
 
 initTheme();
-initVersion();
+void initVersion();
 initUpdater();
-loadServiceInfo();
+void loadServiceInfo();
 renderFileTable();
