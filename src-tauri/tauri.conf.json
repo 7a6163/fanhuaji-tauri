@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "繁化姬",
+  "productName": "Fanhuaji",
   "version": "1.0.0",
   "identifier": "org.zhconvert.fanhuaji",
   "build": {
