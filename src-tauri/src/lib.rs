@@ -463,6 +463,12 @@ mod tests {
     }
 
     #[test]
+    fn api_params_empty_string_modules_skipped() {
+        let params = build_api_params("hello", "Taiwan", "", "", "", "");
+        assert_eq!(params.len(), 2);
+    }
+
+    #[test]
     fn api_params_all_options() {
         let params = build_api_params("text", "Simplified", "a=b", "c=d", "protect", r#"{"X":1}"#);
         assert_eq!(params.len(), 6);
