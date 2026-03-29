@@ -86,7 +86,7 @@ jobs:
         if: contains(matrix.platform, 'windows')
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release" -Filter "Fanhuaji.exe" | Select-Object -First 1
+          $exe = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release" -Filter "*.exe" | Where-Object { $_.Name -notmatch '(setup|uninstall)' } | Select-Object -First 1
           if ($exe) {
             $version = "${{ github.ref_name }}"
             $zipName = "Fanhuaji-${version}-windows-portable.zip"
