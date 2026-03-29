@@ -2,11 +2,13 @@
 
 fn main() {
     // Workaround for WebKitGTK EGL crash on Wayland
-    // https://github.com/nicedoc/nicedoc/pull/1
     #[cfg(target_os = "linux")]
     {
         if std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").is_err() {
-            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            // SAFETY: Called before any threads are spawned (before tauri::Builder::run).
+            unsafe {
+                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+            }
         }
     }
 
