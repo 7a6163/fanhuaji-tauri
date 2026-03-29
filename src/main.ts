@@ -261,25 +261,41 @@ $<HTMLButtonElement>("#btn-close-settings").addEventListener("click", closeSetti
 $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings);
 
 // Custom save folder picker
+const SAVE_FOLDER_KEY = "fanhuaji-save-folder";
 const saveFolderSelect = document.getElementById("save-folder") as HTMLSelectElement | null;
-saveFolderSelect?.addEventListener("change", async () => {
-  if (saveFolderSelect.value !== "custom") return;
 
-  const folder: string | null = await invoke("pick_save_folder");
-  if (folder) {
-    // Add or update the custom path option
-    let customOpt = saveFolderSelect.querySelector<HTMLOptionElement>('option[data-custom-path]');
-    if (!customOpt) {
-      customOpt = document.createElement("option");
-      customOpt.setAttribute("data-custom-path", "true");
-      saveFolderSelect.insertBefore(customOpt, saveFolderSelect.lastElementChild);
+function setCustomFolder(folder: string) {
+  if (!saveFolderSelect) return;
+  let customOpt = saveFolderSelect.querySelector<HTMLOptionElement>("option[data-custom-path]");
+  if (!customOpt) {
+    customOpt = document.createElement("option");
+    customOpt.setAttribute("data-custom-path", "true");
+    saveFolderSelect.insertBefore(customOpt, saveFolderSelect.lastElementChild);
+  }
+  customOpt.value = folder;
+  customOpt.textContent = folder;
+  saveFolderSelect.value = folder;
+  localStorage.setItem(SAVE_FOLDER_KEY, folder);
+}
+
+// Restore saved custom folder
+const savedFolder = localStorage.getItem(SAVE_FOLDER_KEY);
+if (savedFolder && saveFolderSelect) {
+  setCustomFolder(savedFolder);
+}
+
+saveFolderSelect?.addEventListener("change", async () => {
+  if (saveFolderSelect.value === "custom") {
+    const folder: string | null = await invoke("pick_save_folder");
+    if (folder) {
+      setCustomFolder(folder);
+    } else {
+      // Cancelled — revert to previous
+      const prev = localStorage.getItem(SAVE_FOLDER_KEY);
+      saveFolderSelect.value = prev ?? "same";
     }
-    customOpt.value = folder;
-    customOpt.textContent = folder;
-    saveFolderSelect.value = folder;
-  } else {
-    // Cancelled — revert to "same"
-    saveFolderSelect.value = "same";
+  } else if (saveFolderSelect.value === "same") {
+    localStorage.removeItem(SAVE_FOLDER_KEY);
   }
 });
 
