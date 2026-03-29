@@ -257,8 +257,7 @@ mod tests {
         zip.start_file("mimetype", stored).unwrap();
         zip.write_all(b"application/epub+zip").unwrap();
 
-        let deflated =
-            SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
 
         // Minimal META-INF/container.xml
         zip.start_file("META-INF/container.xml", deflated).unwrap();
@@ -293,7 +292,7 @@ mod tests {
 <html xmlns="http://www.w3.org/1999/xhtml">
   <body><p>測試章節</p></body>
 </html>"#
-            .as_bytes(),
+                .as_bytes(),
         )
         .unwrap();
 
@@ -361,8 +360,7 @@ mod tests {
     fn extract_text_mixed_inline_content() {
         // Text nodes split by inline elements (<em>, <strong>) should each be
         // extracted as separate segments.
-        let xhtml =
-            r#"<html><body><p>前面<em>強調</em>後面</p></body></html>"#;
+        let xhtml = r#"<html><body><p>前面<em>強調</em>後面</p></body></html>"#;
         let (text, count) = extract_text(xhtml).unwrap();
         assert_eq!(count, 3);
         let parts: Vec<&str> = text.split(TEXT_DELIMITER).collect();
@@ -412,8 +410,7 @@ mod tests {
     #[test]
     fn replace_text_nested_tags() {
         // Replacement must leave all wrapper elements intact.
-        let xhtml =
-            r#"<html><body><div><section><p>深層文字</p></section></div></body></html>"#;
+        let xhtml = r#"<html><body><div><section><p>深層文字</p></section></div></body></html>"#;
         let result = replace_text(xhtml, "Deep text").unwrap();
         assert!(result.contains("<div>"));
         assert!(result.contains("<section>"));
@@ -425,8 +422,7 @@ mod tests {
     #[test]
     fn replace_text_self_closing_tags_preserved() {
         // Self-closing / void elements like <br/> and <img/> must survive unchanged.
-        let xhtml =
-            r#"<html><body><p>行一<br/>行二</p><img src="cover.jpg"/></body></html>"#;
+        let xhtml = r#"<html><body><p>行一<br/>行二</p><img src="cover.jpg"/></body></html>"#;
         let converted = format!("Line one{TEXT_DELIMITER}Line two");
         let result = replace_text(xhtml, &converted).unwrap();
         assert!(result.contains("Line one"));
