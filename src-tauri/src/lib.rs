@@ -93,6 +93,97 @@ fn sanitize_filename_part(s: &str) -> String {
         .collect()
 }
 
+// --- Output naming ---
+
+fn build_output_name(input: &Path, naming: &str, converter: &str) -> Result<String, String> {
+    let stem = input
+        .file_stem()
+        .ok_or("無法取得檔案名稱")?
+        .to_string_lossy();
+    let ext = input.extension().unwrap_or_default().to_string_lossy();
+
+    match naming {
+        "overwrite" => Ok(input
+            .file_name()
+            .ok_or("無法取得檔案名稱")?
+            .to_string_lossy()
+            .to_string()),
+        "suffix" => Ok(format!("{stem}.converted.{ext}")),
+        _ => {
+            let converter_suffix = sanitize_filename_part(converter);
+            if converter_suffix.is_empty() {
+                return Err("API 回應包含無效的轉換器名稱".to_string());
+            }
+            Ok(format!("{stem}.{converter_suffix}.{ext}"))
+        }
+    }
+}
+
+// --- API params builder ---
+
+fn build_api_params<'a>(
+    text: &'a str,
+    converter: &'a str,
+    pre_replace: &'a str,
+    post_replace: &'a str,
+    protect_replace: &'a str,
+    modules: &'a str,
+) -> Vec<(&'a str, &'a str)> {
+    let mut params = vec![("text", text), ("converter", converter)];
+    if !pre_replace.is_empty() {
+        params.push(("userPreReplace", pre_replace));
+    }
+    if !post_replace.is_empty() {
+        params.push(("userPostReplace", post_replace));
+    }
+    if !protect_replace.is_empty() {
+        params.push(("userProtectReplace", protect_replace));
+    }
+    if modules != "{}" && !modules.is_empty() {
+        params.push(("modules", modules));
+    }
+    params
+}
+
+// --- Module parsing ---
+
+fn parse_modules(data: &ServiceInfoData) -> Vec<ModuleInfo> {
+    let category_names: HashMap<String, String> = data
+        .module_categories
+        .as_ref()
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let mut modules = Vec::new();
+    if let Some(mods) = &data.modules {
+        if let Some(obj) = mods.as_object() {
+            for (key, val) in obj {
+                let name = val
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(key)
+                    .to_string();
+                let desc = val
+                    .get("desc")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let cat_id = val.get("cat").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let category = category_names
+                    .get(cat_id)
+                    .cloned()
+                    .unwrap_or_else(|| "未知".to_string());
+                modules.push(ModuleInfo {
+                    name,
+                    description: desc,
+                    category,
+                });
+            }
+        }
+    }
+    modules
+}
+
 // --- Commands ---
 
 #[tauri::command]
@@ -119,40 +210,7 @@ async fn get_service_info() -> Result<ServiceInfo, String> {
     let mut modules = Vec::new();
 
     if let Some(data) = &info.data {
-        // moduleCategories: { "cat_id": "顯示名稱" }
-        let category_names: HashMap<String, String> = data
-            .module_categories
-            .as_ref()
-            .and_then(|v| serde_json::from_value(v.clone()).ok())
-            .unwrap_or_default();
-
-        // modules: { "ModuleName": { "name": "...", "desc": "...", "cat": "cat_id" } }
-        if let Some(mods) = &data.modules {
-            if let Some(obj) = mods.as_object() {
-                for (key, val) in obj {
-                    let name = val
-                        .get("name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(key)
-                        .to_string();
-                    let desc = val
-                        .get("desc")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string();
-                    let cat_id = val.get("cat").and_then(|v| v.as_str()).unwrap_or("unknown");
-                    let category = category_names
-                        .get(cat_id)
-                        .cloned()
-                        .unwrap_or_else(|| "未知".to_string());
-                    modules.push(ModuleInfo {
-                        name,
-                        description: desc,
-                        category,
-                    });
-                }
-            }
-        }
+        modules = parse_modules(data);
     }
 
     Ok(ServiceInfo {
@@ -215,20 +273,14 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
         .map_err(|e| format!("無法讀取檔案：{e}"))?;
 
     // Build API params
-    let mut params: Vec<(&str, String)> = vec![("text", content), ("converter", converter)];
-
-    if !pre_replace.is_empty() {
-        params.push(("userPreReplace", pre_replace));
-    }
-    if !post_replace.is_empty() {
-        params.push(("userPostReplace", post_replace));
-    }
-    if !protect_replace.is_empty() {
-        params.push(("userProtectReplace", protect_replace));
-    }
-    if modules != "{}" && !modules.is_empty() {
-        params.push(("modules", modules));
-    }
+    let params = build_api_params(
+        &content,
+        &converter,
+        &pre_replace,
+        &post_replace,
+        &protect_replace,
+        &modules,
+    );
 
     // Call API
     let client = http_client()?;
@@ -262,27 +314,7 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
         }
     };
 
-    let stem = input
-        .file_stem()
-        .ok_or("無法取得檔案名稱")?
-        .to_string_lossy();
-    let ext = input.extension().unwrap_or_default().to_string_lossy();
-
-    let output_name = match naming.as_str() {
-        "overwrite" => input
-            .file_name()
-            .ok_or("無法取得檔案名稱")?
-            .to_string_lossy()
-            .to_string(),
-        "suffix" => format!("{stem}.converted.{ext}"),
-        _ => {
-            let converter_suffix = sanitize_filename_part(&data.converter);
-            if converter_suffix.is_empty() {
-                return Err("API 回應包含無效的轉換器名稱".to_string());
-            }
-            format!("{stem}.{converter_suffix}.{ext}")
-        }
-    };
+    let output_name = build_output_name(input, &naming, &data.converter)?;
 
     let output_path = dir.join(&output_name);
 
@@ -312,6 +344,8 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- sanitize_filename_part ---
 
     #[test]
     fn sanitize_keeps_alphanumeric() {
@@ -348,24 +382,178 @@ mod tests {
         assert_eq!(sanitize_filename_part("a!@#b$%^c"), "abc");
     }
 
+    // --- http_client ---
+
     #[test]
     fn http_client_creates_successfully() {
         assert!(http_client().is_ok());
     }
 
+    // --- build_output_name ---
+
+    #[test]
+    fn output_name_overwrite_mode() {
+        let result = build_output_name(Path::new("/tmp/test.srt"), "overwrite", "Taiwan");
+        assert_eq!(result.unwrap(), "test.srt");
+    }
+
+    #[test]
+    fn output_name_suffix_mode() {
+        let result = build_output_name(Path::new("/tmp/test.srt"), "suffix", "Taiwan");
+        assert_eq!(result.unwrap(), "test.converted.srt");
+    }
+
+    #[test]
+    fn output_name_auto_mode() {
+        let result = build_output_name(Path::new("/tmp/test.srt"), "auto", "Taiwan");
+        assert_eq!(result.unwrap(), "test.Taiwan.srt");
+    }
+
+    #[test]
+    fn output_name_auto_with_special_converter() {
+        let result = build_output_name(Path::new("/tmp/test.txt"), "auto", "Wiki/Traditional");
+        assert_eq!(result.unwrap(), "test.WikiTraditional.txt");
+    }
+
+    #[test]
+    fn output_name_auto_empty_converter_fails() {
+        let result = build_output_name(Path::new("/tmp/test.txt"), "auto", "!@#$");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("無效的轉換器名稱"));
+    }
+
+    #[test]
+    fn output_name_no_extension() {
+        let result = build_output_name(Path::new("/tmp/README"), "suffix", "Taiwan");
+        assert_eq!(result.unwrap(), "README.converted.");
+    }
+
+    #[test]
+    fn output_name_chinese_filename() {
+        let result = build_output_name(Path::new("/tmp/字幕.srt"), "auto", "Taiwan");
+        assert_eq!(result.unwrap(), "字幕.Taiwan.srt");
+    }
+
+    // --- build_api_params ---
+
+    #[test]
+    fn api_params_basic() {
+        let params = build_api_params("hello", "Taiwan", "", "", "", "{}");
+        assert_eq!(params.len(), 2);
+        assert_eq!(params[0], ("text", "hello"));
+        assert_eq!(params[1], ("converter", "Taiwan"));
+    }
+
+    #[test]
+    fn api_params_with_pre_replace() {
+        let params = build_api_params("hello", "Taiwan", "a=b", "", "", "{}");
+        assert_eq!(params.len(), 3);
+        assert_eq!(params[2], ("userPreReplace", "a=b"));
+    }
+
+    #[test]
+    fn api_params_with_post_replace() {
+        let params = build_api_params("hello", "Taiwan", "", "c=d", "", "{}");
+        assert_eq!(params.len(), 3);
+        assert_eq!(params[2], ("userPostReplace", "c=d"));
+    }
+
+    #[test]
+    fn api_params_with_protect_replace() {
+        let params = build_api_params("hello", "Taiwan", "", "", "word", "{}");
+        assert_eq!(params.len(), 3);
+        assert_eq!(params[2], ("userProtectReplace", "word"));
+    }
+
+    #[test]
+    fn api_params_with_modules() {
+        let params = build_api_params("hello", "Taiwan", "", "", "", r#"{"Naruto":1}"#);
+        assert_eq!(params.len(), 3);
+        assert_eq!(params[2], ("modules", r#"{"Naruto":1}"#));
+    }
+
+    #[test]
+    fn api_params_empty_modules_skipped() {
+        let params = build_api_params("hello", "Taiwan", "", "", "", "{}");
+        assert_eq!(params.len(), 2);
+    }
+
+    #[test]
+    fn api_params_all_options() {
+        let params = build_api_params("text", "Simplified", "a=b", "c=d", "protect", r#"{"X":1}"#);
+        assert_eq!(params.len(), 6);
+    }
+
+    // --- parse_modules ---
+
+    #[test]
+    fn parse_modules_with_categories() {
+        let data = ServiceInfoData {
+            modules: Some(serde_json::json!({
+                "Naruto": {"name": "火影忍者", "desc": "日本動畫", "cat": "anime"},
+                "Typo": {"name": "錯字修正", "desc": "修正常見錯字", "cat": "func"}
+            })),
+            module_categories: Some(serde_json::json!({
+                "anime": "動畫",
+                "func": "功能性"
+            })),
+        };
+        let modules = parse_modules(&data);
+        assert_eq!(modules.len(), 2);
+        let naruto = modules.iter().find(|m| m.name == "火影忍者").unwrap();
+        assert_eq!(naruto.description, "日本動畫");
+        assert_eq!(naruto.category, "動畫");
+    }
+
+    #[test]
+    fn parse_modules_missing_category_defaults_to_unknown() {
+        let data = ServiceInfoData {
+            modules: Some(serde_json::json!({
+                "Test": {"name": "Test", "desc": "desc", "cat": "nonexistent"}
+            })),
+            module_categories: Some(serde_json::json!({})),
+        };
+        let modules = parse_modules(&data);
+        assert_eq!(modules[0].category, "未知");
+    }
+
+    #[test]
+    fn parse_modules_missing_name_uses_key() {
+        let data = ServiceInfoData {
+            modules: Some(serde_json::json!({
+                "MyModule": {"desc": "description"}
+            })),
+            module_categories: None,
+        };
+        let modules = parse_modules(&data);
+        assert_eq!(modules[0].name, "MyModule");
+    }
+
+    #[test]
+    fn parse_modules_empty() {
+        let data = ServiceInfoData {
+            modules: Some(serde_json::json!({})),
+            module_categories: None,
+        };
+        assert!(parse_modules(&data).is_empty());
+    }
+
+    #[test]
+    fn parse_modules_none() {
+        let data = ServiceInfoData {
+            modules: None,
+            module_categories: None,
+        };
+        assert!(parse_modules(&data).is_empty());
+    }
+
+    // --- Deserialization ---
+
     #[test]
     fn api_response_deserializes_success() {
-        let json = r#"{
-            "code": 0,
-            "msg": "",
-            "data": {
-                "text": "測試",
-                "converter": "Taiwan"
-            }
-        }"#;
+        let json = r#"{"code":0,"msg":"","data":{"text":"測試","converter":"Taiwan"}}"#;
         let resp: ApiResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.code, 0);
-        assert!(resp.data.is_some());
         let data = resp.data.unwrap();
         assert_eq!(data.text, "測試");
         assert_eq!(data.converter, "Taiwan");
@@ -373,11 +561,7 @@ mod tests {
 
     #[test]
     fn api_response_deserializes_error() {
-        let json = r#"{
-            "code": 1,
-            "msg": "error occurred",
-            "data": null
-        }"#;
+        let json = r#"{"code":1,"msg":"error occurred","data":null}"#;
         let resp: ApiResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.code, 1);
         assert_eq!(resp.msg, "error occurred");
@@ -386,55 +570,36 @@ mod tests {
 
     #[test]
     fn service_info_response_deserializes() {
-        let json = r#"{
-            "code": 0,
-            "data": {
-                "modules": {},
-                "moduleCategories": {}
-            },
-            "revisions": {
-                "build": "dict-abc123-r100"
-            }
-        }"#;
+        let json = r#"{"code":0,"data":{"modules":{},"moduleCategories":{}},"revisions":{"build":"dict-abc123-r100"}}"#;
         let resp: ServiceInfoResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.code, 0);
         assert!(resp.data.is_some());
-        let rev = resp.revisions.unwrap();
-        assert_eq!(rev.build.unwrap(), "dict-abc123-r100");
+        assert_eq!(resp.revisions.unwrap().build.unwrap(), "dict-abc123-r100");
     }
 
     #[test]
     fn service_info_response_missing_revisions() {
-        let json = r#"{
-            "code": 0,
-            "data": null,
-            "revisions": null
-        }"#;
+        let json = r#"{"code":0,"data":null,"revisions":null}"#;
         let resp: ServiceInfoResponse = serde_json::from_str(json).unwrap();
         assert!(resp.revisions.is_none());
     }
 
     #[test]
     fn convert_file_params_deserializes() {
-        let json = r#"{
-            "inputPath": "/tmp/test.txt",
-            "converter": "Taiwan",
-            "saveFolder": "same",
-            "naming": "auto",
-            "preReplace": "",
-            "postReplace": "",
-            "protectReplace": "",
-            "modules": "{}"
-        }"#;
+        let json = r#"{"inputPath":"/tmp/test.txt","converter":"Taiwan","saveFolder":"same","naming":"auto","preReplace":"","postReplace":"","protectReplace":"","modules":"{}"}"#;
         let params: ConvertFileParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.input_path, "/tmp/test.txt");
         assert_eq!(params.converter, "Taiwan");
         assert_eq!(params.save_folder, "same");
         assert_eq!(params.naming, "auto");
+        assert!(params.pre_replace.is_empty());
+        assert!(params.post_replace.is_empty());
+        assert!(params.protect_replace.is_empty());
+        assert_eq!(params.modules, "{}");
     }
 
     #[test]
-    fn convert_file_result_serializes() {
+    fn convert_file_result_serializes_camel_case() {
         let result = ConvertFileResult {
             output_name: "test.Taiwan.txt".to_string(),
             output_path: "/tmp/test.Taiwan.txt".to_string(),
@@ -442,50 +607,19 @@ mod tests {
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["outputName"], "test.Taiwan.txt");
         assert_eq!(json["outputPath"], "/tmp/test.Taiwan.txt");
+        assert!(json.get("output_name").is_none());
     }
 
-    #[test]
-    fn output_name_overwrite() {
-        let input = Path::new("/tmp/test.srt");
-        let name = input.file_name().unwrap().to_string_lossy().to_string();
-        assert_eq!(name, "test.srt");
-    }
-
-    #[test]
-    fn output_name_suffix() {
-        let input = Path::new("/tmp/test.srt");
-        let stem = input.file_stem().unwrap().to_string_lossy();
-        let ext = input.extension().unwrap().to_string_lossy();
-        let name = format!("{stem}.converted.{ext}");
-        assert_eq!(name, "test.converted.srt");
-    }
-
-    #[test]
-    fn output_name_auto() {
-        let input = Path::new("/tmp/test.srt");
-        let stem = input.file_stem().unwrap().to_string_lossy();
-        let ext = input.extension().unwrap().to_string_lossy();
-        let converter = sanitize_filename_part("Taiwan");
-        let name = format!("{stem}.{converter}.{ext}");
-        assert_eq!(name, "test.Taiwan.srt");
-    }
-
-    #[test]
-    fn output_dir_same() {
-        let input = Path::new("/home/user/subtitles/test.srt");
-        let dir = input.parent().unwrap();
-        assert_eq!(dir, Path::new("/home/user/subtitles"));
-    }
-
-    #[test]
-    fn output_dir_custom() {
-        let dir = PathBuf::from("/output/folder");
-        assert_eq!(dir, Path::new("/output/folder"));
-    }
+    // --- Constants ---
 
     #[test]
     fn max_file_bytes_is_50mb() {
         assert_eq!(MAX_FILE_BYTES, 50 * 1024 * 1024);
+    }
+
+    #[test]
+    fn api_base_url() {
+        assert_eq!(API_BASE, "https://api.zhconvert.org");
     }
 }
 
