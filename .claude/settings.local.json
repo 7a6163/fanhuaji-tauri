@@ -11,7 +11,8 @@
       "Bash(npm install:*)",
       "Bash(npx biome:*)",
       "Bash(npm run:*)",
-      "Bash(rsvg-convert -w 1024 -h 1024 app-icon.svg -o src-tauri/icons/icon.png)"
+      "Bash(rsvg-convert -w 1024 -h 1024 app-icon.svg -o src-tauri/icons/icon.png)",
+      "Bash(npm test:*)"
     ]
   }
 }

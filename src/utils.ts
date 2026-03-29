@@ -88,6 +88,27 @@ export function isEpubFile(filename: string): boolean {
   return filename.toLowerCase().endsWith(".epub");
 }
 
+export function fileTooltip(file: FileEntry): string {
+  if (file.status === "success" && file.outputPath) {
+    return file.outputPath;
+  }
+  if (file.status === "error" && file.message) {
+    return file.message;
+  }
+  return "";
+}
+
+export function statusDotHtml(status: FileEntry["status"]): string {
+  const classMap: Record<FileEntry["status"], string> = {
+    pending: "pending",
+    converting: "converting",
+    success: "success",
+    error: "error",
+  };
+  const className = classMap[status] ?? "";
+  return `<span class="status-dot ${className}"></span>`;
+}
+
 export function buildModuleOverrides(settings: Record<string, string>): Record<string, number> {
   const overrides: Record<string, number> = {};
   for (const [name, val] of Object.entries(settings)) {
