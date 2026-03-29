@@ -244,6 +244,17 @@ async fn get_service_info() -> Result<ServiceInfo, String> {
 }
 
 #[tauri::command]
+async fn pick_save_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let path = app
+        .dialog()
+        .file()
+        .set_title("選擇輸出資料夾")
+        .blocking_pick_folder();
+
+    Ok(path.map(|p| p.to_string()))
+}
+
+#[tauri::command]
 async fn open_files_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
     let paths = app
         .dialog()
@@ -824,6 +835,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_service_info,
+            pick_save_folder,
             open_files_dialog,
             convert_file,
             convert_epub,

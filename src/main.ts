@@ -260,6 +260,29 @@ $<HTMLButtonElement>("#btn-settings").addEventListener("click", openSettings);
 $<HTMLButtonElement>("#btn-close-settings").addEventListener("click", closeSettings);
 $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings);
 
+// Custom save folder picker
+const saveFolderSelect = document.getElementById("save-folder") as HTMLSelectElement | null;
+saveFolderSelect?.addEventListener("change", async () => {
+  if (saveFolderSelect.value !== "custom") return;
+
+  const folder: string | null = await invoke("pick_save_folder");
+  if (folder) {
+    // Add or update the custom path option
+    let customOpt = saveFolderSelect.querySelector<HTMLOptionElement>('option[data-custom-path]');
+    if (!customOpt) {
+      customOpt = document.createElement("option");
+      customOpt.setAttribute("data-custom-path", "true");
+      saveFolderSelect.insertBefore(customOpt, saveFolderSelect.lastElementChild);
+    }
+    customOpt.value = folder;
+    customOpt.textContent = folder;
+    saveFolderSelect.value = folder;
+  } else {
+    // Cancelled — revert to "same"
+    saveFolderSelect.value = "same";
+  }
+});
+
 // Drawer tabs
 document.querySelectorAll<HTMLButtonElement>(".drawer-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
