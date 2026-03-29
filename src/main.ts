@@ -211,8 +211,9 @@ async function convertPending() {
           modules: JSON.stringify(moduleOverrides),
         };
 
-        const result: { outputName: string; outputPath: string; warnings?: string } =
-          isEpubFile(file.inputName)
+        const result: { outputName: string; outputPath: string; warnings?: string } = isEpubFile(
+          file.inputName,
+        )
           ? await invoke("convert_epub", { params: { ...commonParams, fileId: file.id } })
           : await invoke("convert_file", { params: commonParams });
 
