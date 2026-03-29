@@ -32,6 +32,14 @@
 xattr -cr /Applications/Fanhuaji.app
 ```
 
+### Linux Wayland 問題
+
+在 Wayland 環境下（如 Omarchy、GNOME on Wayland），AppImage 可能出現 `could not create surfaceless EGL display` 錯誤。請使用以下方式啟動：
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 ./Fanhuaji.AppImage
+```
+
 ## 功能
 
 - 批次轉換多個檔案（支援 txt、srt、ass、lrc、vtt、csv、json、xml、html、md 等格式）

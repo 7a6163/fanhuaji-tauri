@@ -5,10 +5,13 @@ import {
   countByStatus,
   escHtml,
   type FileEntry,
+  fileTooltip,
+  isEpubFile,
   isSafeUrl,
   parseFilePath,
   removeCompleted,
   resetErrors,
+  statusDotHtml,
   statusLabel,
 } from "../utils";
 
@@ -278,5 +281,94 @@ describe("isSafeUrl", () => {
 
   it("rejects empty string", () => {
     expect(isSafeUrl("")).toBe(false);
+  });
+});
+
+// --- isEpubFile ---
+
+describe("isEpubFile", () => {
+  it("returns true for .epub extension", () => {
+    expect(isEpubFile("book.epub")).toBe(true);
+  });
+
+  it("returns true for .EPUB (uppercase)", () => {
+    expect(isEpubFile("book.EPUB")).toBe(true);
+  });
+
+  it("returns true for .Epub (mixed case)", () => {
+    expect(isEpubFile("book.Epub")).toBe(true);
+  });
+
+  it("returns false for non-epub file", () => {
+    expect(isEpubFile("book.txt")).toBe(false);
+  });
+
+  it("returns false for filename with multiple dots", () => {
+    expect(isEpubFile("my.book.pdf")).toBe(false);
+  });
+
+  it("returns true for filename with multiple dots ending in .epub", () => {
+    expect(isEpubFile("my.book.epub")).toBe(true);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isEpubFile("")).toBe(false);
+  });
+});
+
+// --- fileTooltip ---
+
+describe("fileTooltip", () => {
+  it("returns outputPath for success with output", () => {
+    const file = makeFile({ status: "success", outputPath: "/tmp/out.txt" });
+    expect(fileTooltip(file)).toBe("/tmp/out.txt");
+  });
+
+  it("returns message for error with message", () => {
+    const file = makeFile({ status: "error", message: "轉換失敗" });
+    expect(fileTooltip(file)).toBe("轉換失敗");
+  });
+
+  it("returns empty string for pending with no message", () => {
+    const file = makeFile({ status: "pending" });
+    expect(fileTooltip(file)).toBe("");
+  });
+
+  it("returns empty string for success without outputPath", () => {
+    const file = makeFile({ status: "success", outputPath: "" });
+    expect(fileTooltip(file)).toBe("");
+  });
+
+  it("returns empty string for error without message", () => {
+    const file = makeFile({ status: "error", message: "" });
+    expect(fileTooltip(file)).toBe("");
+  });
+});
+
+// --- statusDotHtml ---
+
+describe("statusDotHtml", () => {
+  it("produces correct class for pending", () => {
+    const html = statusDotHtml("pending");
+    expect(html).toContain("status-dot");
+    expect(html).toContain("pending");
+  });
+
+  it("produces correct class for converting", () => {
+    const html = statusDotHtml("converting");
+    expect(html).toContain("status-dot");
+    expect(html).toContain("converting");
+  });
+
+  it("produces correct class for success", () => {
+    const html = statusDotHtml("success");
+    expect(html).toContain("status-dot");
+    expect(html).toContain("success");
+  });
+
+  it("produces correct class for error", () => {
+    const html = statusDotHtml("error");
+    expect(html).toContain("status-dot");
+    expect(html).toContain("error");
   });
 });

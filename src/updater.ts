@@ -33,7 +33,7 @@ export async function checkForUpdates(silent = false): Promise<void> {
     if (!silent) {
       setUpdateStatus(`檢查更新失敗：${String(err)}`);
     }
-    console.error("Update check failed:", err);
+    // Update check failed — status already shown in UI if not silent
   }
 }
 

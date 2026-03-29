@@ -9,7 +9,7 @@ vi.mock("@tauri-apps/plugin-process", () => ({
   relaunch: vi.fn(),
 }));
 
-import { check } from "@tauri-apps/plugin-updater";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { checkForUpdates, initUpdater } from "../updater";
 
 const mockCheck = vi.mocked(check);
@@ -57,7 +57,7 @@ describe("updater", () => {
         version: "2.0.0",
         downloadAndInstall: vi.fn(),
       };
-      mockCheck.mockResolvedValue(mockUpdate as any);
+      mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
       vi.spyOn(window, "confirm").mockReturnValue(false);
 
       await checkForUpdates(false);
@@ -70,7 +70,7 @@ describe("updater", () => {
         version: "2.0.0",
         downloadAndInstall: vi.fn().mockResolvedValue(undefined),
       };
-      mockCheck.mockResolvedValue(mockUpdate as any);
+      mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
       vi.spyOn(window, "confirm").mockReturnValue(true);
 
       await checkForUpdates(false);

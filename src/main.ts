@@ -1,21 +1,33 @@
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource-variable/noto-sans-tc";
+import "@tabler/icons-webfont/dist/tabler-icons.min.css";
+import "./styles.css";
+
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { initTheme } from "./theme";
 import { initUpdater } from "./updater";
 import {
-  activateTab,
   buildModuleOverrides,
   countByStatus,
   escHtml,
   type FileEntry,
+  isEpubFile,
   isSafeUrl,
   parseFilePath,
-  removeCompleted,
-  resetErrors,
-  statusLabel,
 } from "./utils";
+
+interface EpubProgressPayload {
+  fileId: string;
+  chapterIndex: number;
+  chapterTotal: number;
+  chapterName: string;
+}
 
 interface ServiceInfo {
   modules: ModuleInfo[];
@@ -44,157 +56,173 @@ const $ = <T extends HTMLElement>(sel: string): T => {
   return el;
 };
 
-const converterEl = $<HTMLSelectElement>("#converter");
-const dictVersionEl = $<HTMLSpanElement>("#dict-version");
-const fileTableBody = $<HTMLTableSectionElement>("#file-table-body");
-const convertBtn = $<HTMLButtonElement>("#btn-convert-all");
-
-// Counts
+const dropZone = $<HTMLDivElement>("#drop-zone");
+const fileList = $<HTMLDivElement>("#file-list");
+const fileItems = $<HTMLDivElement>("#file-items");
+const progressBarContainer = $<HTMLDivElement>("#progress-bar-container");
+const progressBar = $<HTMLDivElement>("#progress-bar");
+const statusBar = $<HTMLElement>("#status-bar");
 const countTotal = $<HTMLSpanElement>("#count-total");
-const countPending = $<HTMLSpanElement>("#count-pending");
 const countSuccess = $<HTMLSpanElement>("#count-success");
 const countError = $<HTMLSpanElement>("#count-error");
+const retryBtn = $<HTMLButtonElement>("#btn-retry");
 
-// --- UI Feedback ---
+// --- Helpers ---
 
-function showError(msg: string) {
-  const statusBar = document.querySelector(".status-bar");
-  if (!statusBar) return;
-
-  const existing = document.getElementById("error-toast");
-  if (existing) existing.remove();
-
-  const toast = document.createElement("span");
-  toast.id = "error-toast";
-  toast.className = "status-badge red";
-  toast.textContent = msg;
-  statusBar.appendChild(toast);
-
-  setTimeout(() => toast.remove(), 5000);
+function statusIcon(status: FileEntry["status"]): string {
+  switch (status) {
+    case "pending":
+      return '<span class="status-icon pending"><i class="ti ti-clock"></i></span>';
+    case "converting":
+      return '<span class="status-icon converting"><i class="ti ti-loader-2"></i></span>';
+    case "success":
+      return '<span class="status-icon success"><i class="ti ti-check"></i></span>';
+    case "error":
+      return '<span class="status-icon error"><i class="ti ti-x"></i></span>';
+  }
 }
 
-// --- Tabs ---
+// --- Render ---
 
-document.querySelectorAll<HTMLButtonElement>(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    const name = tab.dataset.tab;
-    if (name) activateTab(name);
-  });
-});
+function render() {
+  const isEmpty = files.length === 0;
 
-// --- Preview Nav ---
+  dropZone.classList.toggle("hidden", !isEmpty);
+  fileList.classList.toggle("hidden", isEmpty);
+  statusBar.classList.toggle("hidden", isEmpty);
 
-document.querySelectorAll<HTMLButtonElement>(".preview-nav").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".preview-nav").forEach((b) => {
-      b.classList.remove("active");
-    });
-    btn.classList.add("active");
-  });
-});
+  // Show retry button if there are errors
+  const hasErrors = files.some((f) => f.status === "error");
+  retryBtn.classList.toggle("hidden", !hasErrors);
 
-// --- File Operations ---
-
-function updateCounts() {
+  // Counts
   const counts = countByStatus(files);
   countTotal.textContent = String(counts.total);
-  countPending.textContent = String(counts.pending);
   countSuccess.textContent = String(counts.success);
   countError.textContent = String(counts.error);
-}
 
-function renderFileTable() {
-  fileTableBody.innerHTML = files
+  // File items
+  fileItems.innerHTML = files
     .map(
       (f) => `
-    <tr class="status-${escHtml(f.status)}" data-id="${escHtml(f.id)}">
-      <td title="${escHtml(f.inputPath)}">${escHtml(f.inputPath)}</td>
-      <td>${escHtml(f.inputName)}</td>
-      <td>${escHtml(f.encoding)}</td>
-      <td>${escHtml(statusLabel(f.status))}</td>
-      <td>${escHtml(f.message)}</td>
-      <td>${escHtml(f.outputName)}</td>
-      <td title="${escHtml(f.outputPath)}">${escHtml(f.outputPath)}</td>
-    </tr>`,
+    <div class="file-item" data-id="${escHtml(f.id)}">
+      ${statusIcon(f.status)}
+      <span class="file-name" title="${escHtml(`${f.inputPath}/${f.inputName}`)}">${escHtml(f.inputName)}</span>
+      <span class="file-message">${f.status === "success" ? "轉換完成" : f.status === "converting" ? (f.chapterTotal ? `轉換中… (${escHtml(String(f.chapterIndex))}/${escHtml(String(f.chapterTotal))} ${escHtml(f.chapterName ?? "")})` : "轉換中…") : escHtml(f.message)}</span>
+    </div>`,
     )
     .join("");
-  updateCounts();
 }
 
-// --- Open Files ---
+// --- Progress ---
+
+let progressTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function showProgress(percent: number) {
+  progressBarContainer.classList.add("visible");
+  progressBar.style.width = `${percent}%`;
+}
+
+function hideProgress() {
+  if (progressTimeout) clearTimeout(progressTimeout);
+  showProgress(100);
+  progressTimeout = setTimeout(() => {
+    progressBarContainer.classList.remove("visible");
+    progressBar.style.width = "0%";
+    progressTimeout = null;
+  }, 500);
+}
+
+// --- Add files & auto-convert ---
+
+function addFiles(paths: string[]) {
+  const newFiles: FileEntry[] = paths.map((path) => {
+    const { dir, name } = parseFilePath(path);
+    return {
+      id: crypto.randomUUID(),
+      inputPath: dir,
+      inputName: name,
+      encoding: "UTF-8",
+      status: "pending" as const,
+      message: "",
+      outputName: "",
+      outputPath: "",
+    };
+  });
+  files = [...files, ...newFiles];
+  render();
+  void convertPending();
+}
 
 async function openFiles() {
   try {
     const selected: string[] = await invoke("open_files_dialog");
-    const newFiles: FileEntry[] = selected.map((path) => {
-      const { dir, name } = parseFilePath(path);
-      return {
-        id: crypto.randomUUID(),
-        inputPath: dir,
-        inputName: name,
-        encoding: "UTF-8",
-        status: "pending",
-        message: "",
-        outputName: "",
-        outputPath: "",
-      };
-    });
-    files = [...files, ...newFiles];
-    renderFileTable();
-  } catch (err) {
-    showError(`開啟檔案失敗：${String(err)}`);
+    if (selected.length > 0) addFiles(selected);
+  } catch {
+    // Dialog cancelled or failed — no action needed
   }
 }
 
-// --- Convert All ---
+// --- Convert ---
 
-async function convertAll() {
+async function convertPending() {
   if (isConverting) return;
 
-  const converter = converterEl.value;
-  if (converter.startsWith("_")) return;
+  const converterEl = document.getElementById("converter") as HTMLSelectElement | null;
+  const converter = converterEl?.value ?? "Taiwan";
 
-  const saveFolderEl = $<HTMLSelectElement>("#save-folder");
-  const namingEl = $<HTMLSelectElement>("#naming");
-  const preReplace = $<HTMLTextAreaElement>("#pre-replace").value;
-  const postReplace = $<HTMLTextAreaElement>("#post-replace").value;
-  const protectReplace = $<HTMLTextAreaElement>("#protect-replace").value;
+  const saveFolderEl = document.getElementById("save-folder") as HTMLSelectElement | null;
+  const namingEl = document.getElementById("naming") as HTMLSelectElement | null;
+  const preReplace =
+    (document.getElementById("pre-replace") as HTMLTextAreaElement | null)?.value ?? "";
+  const postReplace =
+    (document.getElementById("post-replace") as HTMLTextAreaElement | null)?.value ?? "";
+  const protectReplace =
+    (document.getElementById("protect-replace") as HTMLTextAreaElement | null)?.value ?? "";
 
   const pendingFiles = files.filter((f) => f.status === "pending");
   if (pendingFiles.length === 0) return;
 
   const moduleOverrides = buildModuleOverrides(moduleSettings);
+  const totalPending = pendingFiles.length;
+  let completedCount = 0;
 
   isConverting = true;
-  convertBtn.setAttribute("disabled", "true");
+  if (progressTimeout) clearTimeout(progressTimeout);
+  showProgress(0);
 
   try {
     for (const file of pendingFiles) {
       files = files.map((f) =>
         f.id === file.id ? { ...f, status: "converting" as const, message: "" } : f,
       );
-      renderFileTable();
+      render();
 
       try {
-        const result: { outputName: string; outputPath: string } = await invoke("convert_file", {
-          params: {
-            inputPath: `${file.inputPath}/${file.inputName}`,
-            converter,
-            saveFolder: saveFolderEl.value,
-            naming: namingEl.value,
-            preReplace,
-            postReplace,
-            protectReplace,
-            modules: JSON.stringify(moduleOverrides),
-          },
-        });
+        const fullPath = `${file.inputPath}/${file.inputName}`;
+        const commonParams = {
+          inputPath: fullPath,
+          converter,
+          saveFolder: saveFolderEl?.value ?? "same",
+          naming: namingEl?.value ?? "auto",
+          preReplace,
+          postReplace,
+          protectReplace,
+          modules: JSON.stringify(moduleOverrides),
+        };
+
+        const result: { outputName: string; outputPath: string; warnings?: string } = isEpubFile(
+          file.inputName,
+        )
+          ? await invoke("convert_epub", { params: { ...commonParams, fileId: file.id } })
+          : await invoke("convert_file", { params: commonParams });
 
         files = files.map((f) =>
           f.id === file.id
             ? {
                 ...f,
                 status: "success" as const,
-                message: "轉換完成",
+                message: result.warnings ? `轉換完成（${result.warnings}）` : "轉換完成",
                 outputName: result.outputName,
                 outputPath: result.outputPath,
               }
@@ -205,24 +233,96 @@ async function convertAll() {
           f.id === file.id ? { ...f, status: "error" as const, message: String(err) } : f,
         );
       }
-      renderFileTable();
+
+      completedCount++;
+      showProgress((completedCount / totalPending) * 100);
+      render();
     }
   } finally {
     isConverting = false;
-    convertBtn.removeAttribute("disabled");
+    hideProgress();
   }
 }
+
+// --- Settings drawer ---
+
+function openSettings() {
+  $<HTMLDivElement>("#settings-backdrop").classList.remove("hidden");
+  $<HTMLElement>("#settings-drawer").classList.remove("hidden");
+}
+
+function closeSettings() {
+  $<HTMLDivElement>("#settings-backdrop").classList.add("hidden");
+  $<HTMLElement>("#settings-drawer").classList.add("hidden");
+}
+
+$<HTMLButtonElement>("#btn-settings").addEventListener("click", openSettings);
+$<HTMLButtonElement>("#btn-close-settings").addEventListener("click", closeSettings);
+$<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings);
+
+// Custom save folder picker
+const SAVE_FOLDER_KEY = "fanhuaji-save-folder";
+const saveFolderSelect = document.getElementById("save-folder") as HTMLSelectElement | null;
+
+function setCustomFolder(folder: string) {
+  if (!saveFolderSelect) return;
+  let customOpt = saveFolderSelect.querySelector<HTMLOptionElement>("option[data-custom-path]");
+  if (!customOpt) {
+    customOpt = document.createElement("option");
+    customOpt.setAttribute("data-custom-path", "true");
+    saveFolderSelect.insertBefore(customOpt, saveFolderSelect.lastElementChild);
+  }
+  customOpt.value = folder;
+  customOpt.textContent = folder;
+  saveFolderSelect.value = folder;
+  localStorage.setItem(SAVE_FOLDER_KEY, folder);
+}
+
+// Restore saved custom folder
+const savedFolder = localStorage.getItem(SAVE_FOLDER_KEY);
+if (savedFolder && saveFolderSelect) {
+  setCustomFolder(savedFolder);
+}
+
+saveFolderSelect?.addEventListener("change", async () => {
+  if (saveFolderSelect.value === "custom") {
+    const folder: string | null = await invoke("pick_save_folder");
+    if (folder) {
+      setCustomFolder(folder);
+    } else {
+      // Cancelled — revert to previous
+      const prev = localStorage.getItem(SAVE_FOLDER_KEY);
+      saveFolderSelect.value = prev ?? "same";
+    }
+  } else if (saveFolderSelect.value === "same") {
+    localStorage.removeItem(SAVE_FOLDER_KEY);
+  }
+});
+
+// Drawer tabs
+document.querySelectorAll<HTMLButtonElement>(".drawer-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".drawer-tab").forEach((t) => {
+      t.classList.remove("active");
+    });
+    document.querySelectorAll(".drawer-panel").forEach((p) => {
+      p.classList.remove("active");
+    });
+    tab.classList.add("active");
+    const panel = document.querySelector(`[data-panel="${tab.dataset.drawerTab}"]`);
+    panel?.classList.add("active");
+  });
+});
 
 // --- Module loading ---
 
 async function loadServiceInfo() {
   try {
     const info: ServiceInfo = await invoke("get_service_info");
-    dictVersionEl.textContent = info.dict_version;
     moduleData = info.modules;
     renderModuleCategories();
-  } catch (err) {
-    showError(`載入服務資訊失敗：${String(err)}`);
+  } catch {
+    // Service info unavailable — modules panel will be empty
   }
 }
 
@@ -232,7 +332,7 @@ function renderModuleCategories() {
   container.innerHTML = categories
     .map(
       (c, i) =>
-        `<div class="module-category${i === 0 ? " active" : ""}" data-category="${escHtml(c)}">${escHtml(c)}</div>`,
+        `<button type="button" class="module-cat-btn${i === 0 ? " active" : ""}" data-category="${escHtml(c)}">${escHtml(c)}</button>`,
     )
     .join("");
 
@@ -241,9 +341,9 @@ function renderModuleCategories() {
     renderModuleList();
   }
 
-  container.querySelectorAll<HTMLDivElement>(".module-category").forEach((el) => {
+  container.querySelectorAll<HTMLButtonElement>(".module-cat-btn").forEach((el) => {
     el.addEventListener("click", () => {
-      container.querySelectorAll(".module-category").forEach((c) => {
+      container.querySelectorAll(".module-cat-btn").forEach((c) => {
         c.classList.remove("active");
       });
       el.classList.add("active");
@@ -261,7 +361,7 @@ function renderModuleList() {
       (m) => `
     <div class="module-item">
       <select data-module="${escHtml(m.name)}">
-        <option value="auto"${(moduleSettings[m.name] ?? "auto") === "auto" ? " selected" : ""}>自動偵測</option>
+        <option value="auto"${(moduleSettings[m.name] ?? "auto") === "auto" ? " selected" : ""}>自動</option>
         <option value="enable"${moduleSettings[m.name] === "enable" ? " selected" : ""}>啟用</option>
         <option value="disable"${moduleSettings[m.name] === "disable" ? " selected" : ""}>停用</option>
       </select>
@@ -281,22 +381,27 @@ function renderModuleList() {
 
 // --- Button handlers ---
 
-$<HTMLButtonElement>("#btn-open").addEventListener("click", openFiles);
-convertBtn.addEventListener("click", convertAll);
+dropZone.addEventListener("click", openFiles);
+dropZone.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    openFiles();
+  }
+});
 
-$<HTMLButtonElement>("#btn-remove-all").addEventListener("click", () => {
+$<HTMLButtonElement>("#btn-add-more").addEventListener("click", openFiles);
+
+$<HTMLButtonElement>("#btn-clear").addEventListener("click", () => {
   files = [];
-  renderFileTable();
+  render();
 });
 
-$<HTMLButtonElement>("#btn-remove-done").addEventListener("click", () => {
-  files = removeCompleted(files);
-  renderFileTable();
-});
-
-$<HTMLButtonElement>("#btn-reset-errors").addEventListener("click", () => {
-  files = resetErrors(files);
-  renderFileTable();
+retryBtn.addEventListener("click", () => {
+  files = files.map((f) =>
+    f.status === "error" ? { ...f, status: "pending" as const, message: "" } : f,
+  );
+  render();
+  void convertPending();
 });
 
 // --- External links ---
@@ -311,35 +416,17 @@ document.querySelectorAll<HTMLAnchorElement>("a[data-href]").forEach((a) => {
 
 // --- Drag & Drop ---
 
-const dropOverlay = document.getElementById("drop-overlay");
-
-getCurrentWebviewWindow().onDragDropEvent((event) => {
+void getCurrentWebviewWindow().onDragDropEvent((event) => {
   const { type } = event.payload;
   if (type === "enter" || type === "over") {
-    dropOverlay?.classList.add("visible");
+    dropZone.classList.add("drag-over");
   } else if (type === "drop") {
-    dropOverlay?.classList.remove("visible");
+    dropZone.classList.remove("drag-over");
     if ("paths" in event.payload) {
-      const paths: string[] = event.payload.paths;
-      const newFiles: FileEntry[] = paths.map((path) => {
-        const { dir, name } = parseFilePath(path);
-        return {
-          id: crypto.randomUUID(),
-          inputPath: dir,
-          inputName: name,
-          encoding: "UTF-8",
-          status: "pending" as const,
-          message: "",
-          outputName: "",
-          outputPath: "",
-        };
-      });
-      files = [...files, ...newFiles];
-      renderFileTable();
-      activateTab("file-list");
+      addFiles(event.payload.paths);
     }
   } else if (type === "leave") {
-    dropOverlay?.classList.remove("visible");
+    dropZone.classList.remove("drag-over");
   }
 });
 
@@ -351,8 +438,8 @@ async function initVersion() {
     const el = document.getElementById("app-version");
     if (el) el.textContent = version;
     document.title = `繁化姬 ${version}`;
-  } catch (err) {
-    console.error("Failed to get version:", err);
+  } catch {
+    // Version unavailable — title stays as default
   }
 }
 
@@ -360,4 +447,13 @@ initTheme();
 void initVersion();
 initUpdater();
 void loadServiceInfo();
-renderFileTable();
+render();
+
+// Listen for EPUB chapter progress
+void listen<EpubProgressPayload>("epub-progress", (event) => {
+  const { fileId, chapterIndex, chapterTotal, chapterName } = event.payload;
+  files = files.map((f) =>
+    f.id === fileId ? { ...f, chapterIndex, chapterTotal, chapterName } : f,
+  );
+  render();
+});
