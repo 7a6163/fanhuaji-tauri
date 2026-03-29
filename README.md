@@ -1,6 +1,6 @@
 # 繁化姬 Tauri 版
 
-中文繁簡轉換桌面應用程式，基於 [zhconvert.org](https://zhconvert.org) API，使用 Tauri 2 建構。
+基於 [Fanhuaji-GUI-by-James1201](https://github.com/Fanhuaji/Fanhuaji-GUI-by-James1201) 使用 Tauri 2 重新撰寫的中文繁簡轉換桌面應用程式，使用 [zhconvert.org](https://zhconvert.org) API。
 
 ## 下載
 
