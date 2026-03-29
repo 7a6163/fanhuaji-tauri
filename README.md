@@ -16,6 +16,20 @@
 
 應用程式內建自動更新，啟動時會自動檢查新版本。
 
+### macOS 首次開啟
+
+由於應用程式未經 Apple 簽名，macOS 會顯示「無法打開」的警告。請依以下步驟操作：
+
+1. 點擊 **Done**（完成）
+2. 前往 **系統設定 → 隱私與安全性**
+3. 往下滑找到「Fanhuaji was blocked」，點擊 **仍要打開**
+
+或在終端機執行：
+
+```bash
+xattr -cr /Applications/Fanhuaji.app
+```
+
 ## 功能
 
 - 批次轉換多個檔案（支援 txt、srt、ass、lrc、vtt、csv、json、xml、html、md 等格式）
@@ -88,4 +102,4 @@ gh release create v1.x.x src-tauri/target/release/bundle/dmg/*.dmg --title "v1.x
 
 本程式原始碼以 [MIT](LICENSE) 授權釋出。
 
-本程式使用了[繁化姬](https://docs.zhconvert.org/)的 API 服務，其使用須遵守繁化姬的[服務條款](https://docs.zhconvert.org/license/)。繁化姬商用必須付費，詳情請參閱[商業授權](https://docs.zhconvert.org/commercial/)。
+本程式使用了[繁化姬](https://docs.zhconvert.org/)的 API 服務，其使用須遵守繁化姬的[服務條款](https://docs.zhconvert.org/license/)。商業使用請參閱繁化姬[授權條款](https://docs.zhconvert.org/license/)。

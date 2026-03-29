@@ -309,6 +309,190 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_keeps_alphanumeric() {
+        assert_eq!(sanitize_filename_part("Taiwan"), "Taiwan");
+    }
+
+    #[test]
+    fn sanitize_keeps_hyphens_and_underscores() {
+        assert_eq!(sanitize_filename_part("my-file_name"), "my-file_name");
+    }
+
+    #[test]
+    fn sanitize_removes_special_characters() {
+        assert_eq!(sanitize_filename_part("a/b\\c:d"), "abcd");
+    }
+
+    #[test]
+    fn sanitize_removes_spaces() {
+        assert_eq!(sanitize_filename_part("hello world"), "helloworld");
+    }
+
+    #[test]
+    fn sanitize_handles_empty_string() {
+        assert_eq!(sanitize_filename_part(""), "");
+    }
+
+    #[test]
+    fn sanitize_handles_chinese_characters() {
+        assert_eq!(sanitize_filename_part("台灣化"), "台灣化");
+    }
+
+    #[test]
+    fn sanitize_mixed_content() {
+        assert_eq!(sanitize_filename_part("a!@#b$%^c"), "abc");
+    }
+
+    #[test]
+    fn http_client_creates_successfully() {
+        assert!(http_client().is_ok());
+    }
+
+    #[test]
+    fn api_response_deserializes_success() {
+        let json = r#"{
+            "code": 0,
+            "msg": "",
+            "data": {
+                "text": "測試",
+                "converter": "Taiwan"
+            }
+        }"#;
+        let resp: ApiResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.code, 0);
+        assert!(resp.data.is_some());
+        let data = resp.data.unwrap();
+        assert_eq!(data.text, "測試");
+        assert_eq!(data.converter, "Taiwan");
+    }
+
+    #[test]
+    fn api_response_deserializes_error() {
+        let json = r#"{
+            "code": 1,
+            "msg": "error occurred",
+            "data": null
+        }"#;
+        let resp: ApiResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.code, 1);
+        assert_eq!(resp.msg, "error occurred");
+        assert!(resp.data.is_none());
+    }
+
+    #[test]
+    fn service_info_response_deserializes() {
+        let json = r#"{
+            "code": 0,
+            "data": {
+                "modules": {},
+                "moduleCategories": {}
+            },
+            "revisions": {
+                "build": "dict-abc123-r100"
+            }
+        }"#;
+        let resp: ServiceInfoResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.code, 0);
+        assert!(resp.data.is_some());
+        let rev = resp.revisions.unwrap();
+        assert_eq!(rev.build.unwrap(), "dict-abc123-r100");
+    }
+
+    #[test]
+    fn service_info_response_missing_revisions() {
+        let json = r#"{
+            "code": 0,
+            "data": null,
+            "revisions": null
+        }"#;
+        let resp: ServiceInfoResponse = serde_json::from_str(json).unwrap();
+        assert!(resp.revisions.is_none());
+    }
+
+    #[test]
+    fn convert_file_params_deserializes() {
+        let json = r#"{
+            "inputPath": "/tmp/test.txt",
+            "converter": "Taiwan",
+            "saveFolder": "same",
+            "naming": "auto",
+            "preReplace": "",
+            "postReplace": "",
+            "protectReplace": "",
+            "modules": "{}"
+        }"#;
+        let params: ConvertFileParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.input_path, "/tmp/test.txt");
+        assert_eq!(params.converter, "Taiwan");
+        assert_eq!(params.save_folder, "same");
+        assert_eq!(params.naming, "auto");
+    }
+
+    #[test]
+    fn convert_file_result_serializes() {
+        let result = ConvertFileResult {
+            output_name: "test.Taiwan.txt".to_string(),
+            output_path: "/tmp/test.Taiwan.txt".to_string(),
+        };
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["outputName"], "test.Taiwan.txt");
+        assert_eq!(json["outputPath"], "/tmp/test.Taiwan.txt");
+    }
+
+    #[test]
+    fn output_name_overwrite() {
+        let input = Path::new("/tmp/test.srt");
+        let name = input
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        assert_eq!(name, "test.srt");
+    }
+
+    #[test]
+    fn output_name_suffix() {
+        let input = Path::new("/tmp/test.srt");
+        let stem = input.file_stem().unwrap().to_string_lossy();
+        let ext = input.extension().unwrap().to_string_lossy();
+        let name = format!("{stem}.converted.{ext}");
+        assert_eq!(name, "test.converted.srt");
+    }
+
+    #[test]
+    fn output_name_auto() {
+        let input = Path::new("/tmp/test.srt");
+        let stem = input.file_stem().unwrap().to_string_lossy();
+        let ext = input.extension().unwrap().to_string_lossy();
+        let converter = sanitize_filename_part("Taiwan");
+        let name = format!("{stem}.{converter}.{ext}");
+        assert_eq!(name, "test.Taiwan.srt");
+    }
+
+    #[test]
+    fn output_dir_same() {
+        let input = Path::new("/home/user/subtitles/test.srt");
+        let dir = input.parent().unwrap();
+        assert_eq!(dir, Path::new("/home/user/subtitles"));
+    }
+
+    #[test]
+    fn output_dir_custom() {
+        let dir = PathBuf::from("/output/folder");
+        assert_eq!(dir, Path::new("/output/folder"));
+    }
+
+    #[test]
+    fn max_file_bytes_is_50mb() {
+        assert_eq!(MAX_FILE_BYTES, 50 * 1024 * 1024);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

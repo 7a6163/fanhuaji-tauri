@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "繁化姬 1.0.0",
+        "title": "繁化姬",
         "width": 760,
         "height": 680,
         "resizable": true,

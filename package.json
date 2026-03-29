@@ -9,6 +9,8 @@
     "tauri": "tauri",
     "lint": "biome check",
     "lint:fix": "biome check --fix",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "check": "tsc --noEmit && biome check",
     "version": "node scripts/sync-version.mjs && git add src-tauri/tauri.conf.json src-tauri/Cargo.toml"
   },
@@ -16,8 +18,11 @@
     "@biomejs/biome": "2.4.9",
     "@tauri-apps/api": "^2",
     "@tauri-apps/cli": "^2",
+    "@vitest/coverage-v8": "^4.1.2",
+    "jsdom": "^29.0.1",
     "typescript": "^5.6.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.1.2"
   },
   "dependencies": {
     "@tabler/icons-webfont": "^3.41.0",

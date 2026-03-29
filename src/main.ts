@@ -1,20 +1,18 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { initTheme } from "./theme";
 import { initUpdater } from "./updater";
-
-// --- Types ---
-
-interface FileEntry {
-  id: string;
-  inputPath: string;
-  inputName: string;
-  encoding: string;
-  status: "pending" | "converting" | "success" | "error";
-  message: string;
-  outputName: string;
-  outputPath: string;
-}
+import {
+  buildModuleOverrides,
+  countByStatus,
+  escHtml,
+  type FileEntry,
+  parseFilePath,
+  removeCompleted,
+  resetErrors,
+  statusLabel,
+} from "./utils";
 
 interface ServiceInfo {
   modules: ModuleInfo[];
@@ -34,20 +32,6 @@ let isConverting = false;
 let moduleData: ModuleInfo[] = [];
 let moduleSettings: Record<string, string> = {};
 let activeCategory = "";
-
-// --- Utilities ---
-
-function escHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
 
 // --- DOM ---
 
@@ -116,14 +100,11 @@ document.querySelectorAll<HTMLButtonElement>(".preview-nav").forEach((btn) => {
 // --- File Operations ---
 
 function updateCounts() {
-  const total = files.length;
-  const pending = files.filter((f) => f.status === "pending").length;
-  const success = files.filter((f) => f.status === "success").length;
-  const error = files.filter((f) => f.status === "error").length;
-  countTotal.textContent = String(total);
-  countPending.textContent = String(pending);
-  countSuccess.textContent = String(success);
-  countError.textContent = String(error);
+  const counts = countByStatus(files);
+  countTotal.textContent = String(counts.total);
+  countPending.textContent = String(counts.pending);
+  countSuccess.textContent = String(counts.success);
+  countError.textContent = String(counts.error);
 }
 
 function renderFileTable() {
@@ -144,27 +125,15 @@ function renderFileTable() {
   updateCounts();
 }
 
-function statusLabel(s: string): string {
-  const map: Record<string, string> = {
-    pending: "待轉換",
-    converting: "轉換中…",
-    success: "完成",
-    error: "錯誤",
-  };
-  return map[s] ?? s;
-}
-
 // --- Open Files ---
 
 async function openFiles() {
   try {
     const selected: string[] = await invoke("open_files_dialog");
     const newFiles: FileEntry[] = selected.map((path) => {
-      const parts = path.replace(/\\/g, "/").split("/");
-      const name = parts.pop() ?? "";
-      const dir = parts.join("/");
+      const { dir, name } = parseFilePath(path);
       return {
-        id: generateId(),
+        id: crypto.randomUUID(),
         inputPath: dir,
         inputName: name,
         encoding: "UTF-8",
@@ -198,12 +167,7 @@ async function convertAll() {
   const pendingFiles = files.filter((f) => f.status === "pending");
   if (pendingFiles.length === 0) return;
 
-  // Build module overrides
-  const moduleOverrides: Record<string, number> = {};
-  for (const [name, val] of Object.entries(moduleSettings)) {
-    if (val === "enable") moduleOverrides[name] = 1;
-    else if (val === "disable") moduleOverrides[name] = 0;
-  }
+  const moduleOverrides = buildModuleOverrides(moduleSettings);
 
   isConverting = true;
   convertBtn.setAttribute("disabled", "true");
@@ -328,14 +292,12 @@ $<HTMLButtonElement>("#btn-remove-all").addEventListener("click", () => {
 });
 
 $<HTMLButtonElement>("#btn-remove-done").addEventListener("click", () => {
-  files = files.filter((f) => f.status !== "success");
+  files = removeCompleted(files);
   renderFileTable();
 });
 
 $<HTMLButtonElement>("#btn-reset-errors").addEventListener("click", () => {
-  files = files.map((f) =>
-    f.status === "error" ? { ...f, status: "pending" as const, message: "" } : f,
-  );
+  files = resetErrors(files);
   renderFileTable();
 });
 
@@ -361,7 +323,15 @@ document.addEventListener("drop", async (e) => {
 
 // --- Init ---
 
+async function initVersion() {
+  const version = await getVersion();
+  const el = document.getElementById("app-version");
+  if (el) el.textContent = version;
+  document.title = `繁化姬 ${version}`;
+}
+
 initTheme();
+initVersion();
 initUpdater();
 loadServiceInfo();
 renderFileTable();
