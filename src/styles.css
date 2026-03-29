@@ -106,6 +106,12 @@ body {
   justify-content: center;
 }
 
+.api-notice {
+  padding: 0 16px 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .icon-btn:hover {
   background: var(--hover);
   color: var(--text);
