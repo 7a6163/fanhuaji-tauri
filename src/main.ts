@@ -158,8 +158,8 @@ async function openFiles() {
   try {
     const selected: string[] = await invoke("open_files_dialog");
     if (selected.length > 0) addFiles(selected);
-  } catch (err) {
-    console.error("Failed to open files:", err);
+  } catch {
+    // Dialog cancelled or failed — no action needed
   }
 }
 
@@ -282,8 +282,8 @@ async function loadServiceInfo() {
     const info: ServiceInfo = await invoke("get_service_info");
     moduleData = info.modules;
     renderModuleCategories();
-  } catch (err) {
-    console.error("Failed to load service info:", err);
+  } catch {
+    // Service info unavailable — modules panel will be empty
   }
 }
 
@@ -377,7 +377,7 @@ document.querySelectorAll<HTMLAnchorElement>("a[data-href]").forEach((a) => {
 
 // --- Drag & Drop ---
 
-getCurrentWebviewWindow().onDragDropEvent((event) => {
+void getCurrentWebviewWindow().onDragDropEvent((event) => {
   const { type } = event.payload;
   if (type === "enter" || type === "over") {
     dropZone.classList.add("drag-over");
@@ -399,8 +399,8 @@ async function initVersion() {
     const el = document.getElementById("app-version");
     if (el) el.textContent = version;
     document.title = `繁化姬 ${version}`;
-  } catch (err) {
-    console.error("Failed to get version:", err);
+  } catch {
+    // Version unavailable — title stays as default
   }
 }
 
