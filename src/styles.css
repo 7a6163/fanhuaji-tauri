@@ -554,7 +554,7 @@ textarea:focus {
   border: none;
   border-right: 1px solid var(--border);
   background: inherit;
-  color: var(--text);
+  color: inherit;
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
