@@ -718,8 +718,8 @@ tr.status-error td {
   color: #fff;
 }
 
-[data-theme="dark"] .theme-option,
-[data-theme="system"] .theme-option {
+[data-theme="dark"] .theme-option:not(.active),
+[data-theme="system"] .theme-option:not(.active) {
   background: #3a3a3a;
   border-color: #555;
   color: #aaa;
@@ -737,7 +737,7 @@ tr.status-error td {
 }
 
 @media (prefers-color-scheme: light) {
-  [data-theme="system"] .theme-option {
+  [data-theme="system"] .theme-option:not(.active) {
     background: #f5f5f5;
     border-color: #c0c0c0;
     color: #666;
