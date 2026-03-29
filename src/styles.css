@@ -265,10 +265,12 @@ body {
   flex: 1;
   gap: 10px;
   padding: 8px;
+  min-width: 0;
 }
 
 .table-container {
   flex: 1;
+  min-width: 0;
   border: 1px solid var(--border);
   background: var(--surface);
   overflow: auto;
