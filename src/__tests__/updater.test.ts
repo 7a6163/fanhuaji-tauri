@@ -80,9 +80,11 @@ describe("updater", () => {
     it("sets download complete message when Finished event received", async () => {
       const mockUpdate = {
         version: "2.0.0",
-        downloadAndInstall: vi.fn().mockImplementation(async (cb: (event: { event: string }) => void) => {
-          cb({ event: "Finished" });
-        }),
+        downloadAndInstall: vi
+          .fn()
+          .mockImplementation(async (cb: (event: { event: string }) => void) => {
+            cb({ event: "Finished" });
+          }),
       };
       mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
       vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -95,9 +97,11 @@ describe("updater", () => {
     it("does not set complete message for non-Finished events", async () => {
       const mockUpdate = {
         version: "2.0.0",
-        downloadAndInstall: vi.fn().mockImplementation(async (cb: (event: { event: string }) => void) => {
-          cb({ event: "Progress" });
-        }),
+        downloadAndInstall: vi
+          .fn()
+          .mockImplementation(async (cb: (event: { event: string }) => void) => {
+            cb({ event: "Progress" });
+          }),
       };
       mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
       vi.spyOn(window, "confirm").mockReturnValue(true);
