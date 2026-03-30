@@ -104,14 +104,9 @@ struct EpubProgress {
     chapter_name: String,
 }
 
-// --- HTTP Client ---
+// --- HTTP Client (shared via Tauri managed state) ---
 
-fn http_client() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("無法建立 HTTP 客戶端：{e}"))
-}
+struct HttpClient(reqwest::Client);
 
 // --- Filename sanitization ---
 
@@ -215,9 +210,9 @@ fn parse_modules(data: &ServiceInfoData) -> Vec<ModuleInfo> {
 // --- Commands ---
 
 #[tauri::command]
-async fn get_service_info() -> Result<ServiceInfo, String> {
+async fn get_service_info(client: tauri::State<'_, HttpClient>) -> Result<ServiceInfo, String> {
     let url = format!("{API_BASE}/service-info");
-    let client = http_client()?;
+    let client = &client.0;
     let resp = client
         .get(&url)
         .send()
@@ -277,7 +272,10 @@ async fn open_files_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String>
 }
 
 #[tauri::command]
-async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, String> {
+async fn convert_file(
+    client: tauri::State<'_, HttpClient>,
+    params: ConvertFileParams,
+) -> Result<ConvertFileResult, String> {
     let ConvertFileParams {
         input_path,
         converter,
@@ -318,9 +316,9 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
     );
 
     // Call API
-    let client = http_client()?;
     let url = format!("{API_BASE}/convert");
     let resp = client
+        .0
         .post(&url)
         .form(&params)
         .send()
@@ -368,6 +366,7 @@ async fn convert_file(params: ConvertFileParams) -> Result<ConvertFileResult, St
 #[tauri::command]
 async fn convert_epub(
     app: tauri::AppHandle,
+    client: tauri::State<'_, HttpClient>,
     params: ConvertEpubParams,
 ) -> Result<ConvertFileResult, String> {
     let ConvertEpubParams {
@@ -401,7 +400,6 @@ async fn convert_epub(
             .map_err(|e| format!("解壓錯誤：{e}"))??;
 
     let chapter_total = content_files.len();
-    let client = http_client()?;
     let url = format!("{API_BASE}/convert");
     let mut errors: Vec<String> = Vec::new();
 
@@ -452,7 +450,7 @@ async fn convert_epub(
             &modules,
         );
 
-        let resp = match client.post(&url).form(&api_params).send().await {
+        let resp = match client.0.post(&url).form(&api_params).send().await {
             Ok(r) => r,
             Err(e) => {
                 errors.push(format!("{chapter_name}: 網路請求失敗 ({e})"));
@@ -571,13 +569,6 @@ mod tests {
     #[test]
     fn sanitize_mixed_content() {
         assert_eq!(sanitize_filename_part("a!@#b$%^c"), "abc");
-    }
-
-    // --- http_client ---
-
-    #[test]
-    fn http_client_creates_successfully() {
-        assert!(http_client().is_ok());
     }
 
     // --- build_output_name ---
@@ -824,6 +815,12 @@ mod tests {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(HttpClient(
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("無法建立 HTTP 客戶端"),
+        ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
