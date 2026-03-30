@@ -2,6 +2,16 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.0.4] - 2026-03-30
+
+### Fixed
+
+- Windows 桌面捷徑圖示模糊（ICO 檔從單一 16x16 改為包含 16~256 多解析度）
+
+### Changed
+
+- 更新專案描述，移除舊版 GUI 參考
+
 ## [2.0.3] - 2026-03-30
 
 ### Added
