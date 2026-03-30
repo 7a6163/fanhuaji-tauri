@@ -53,4 +53,17 @@ describe("theme", () => {
     initTheme();
     expect(document.documentElement.getAttribute("data-theme")).toBe("system");
   });
+
+  it("ignores click on button without data-theme attribute", () => {
+    document.body.innerHTML = `
+      <div class="theme-options">
+        <button type="button" class="theme-option" data-theme="system">系統</button>
+        <button type="button" class="theme-option">無主題</button>
+      </div>
+    `;
+    initTheme();
+    const noThemeBtn = document.querySelectorAll<HTMLButtonElement>(".theme-option")[1];
+    noThemeBtn?.click();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("system");
+  });
 });
