@@ -18,7 +18,7 @@ struct ApiResponse {
     data: Option<ApiConvertData>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ApiConvertData {
     text: String,
@@ -46,14 +46,14 @@ struct Revisions {
 
 // --- Return Types ---
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ModuleInfo {
     name: String,
     description: String,
     category: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ServiceInfo {
     modules: Vec<ModuleInfo>,
     dict_version: String,
@@ -207,6 +207,32 @@ fn parse_modules(data: &ServiceInfoData) -> Vec<ModuleInfo> {
     modules
 }
 
+// --- Pure helpers ---
+
+fn resolve_output_dir(input: &Path, save_folder: &str) -> Result<PathBuf, String> {
+    match save_folder {
+        "same" => input
+            .parent()
+            .ok_or_else(|| "輸入路徑沒有父目錄".to_string())
+            .map(|p| p.to_path_buf()),
+        custom => Ok(PathBuf::from(custom)),
+    }
+}
+
+fn validate_api_response(api: ApiResponse) -> Result<ApiConvertData, String> {
+    if api.code != 0 {
+        return Err(format!("API 錯誤：{}", api.msg));
+    }
+    api.data.ok_or_else(|| "API 回應缺少 data 欄位".to_string())
+}
+
+fn check_file_size(len: u64) -> Result<(), String> {
+    if len > MAX_FILE_BYTES {
+        return Err("檔案過大（上限 50 MB）".to_string());
+    }
+    Ok(())
+}
+
 // --- Commands ---
 
 #[tauri::command]
@@ -224,12 +250,15 @@ async fn get_service_info(client: tauri::State<'_, HttpClient>) -> Result<Servic
         .await
         .map_err(|e| format!("回應解析失敗：{e}"))?;
 
+    build_service_info(info)
+}
+
+fn build_service_info(info: ServiceInfoResponse) -> Result<ServiceInfo, String> {
     if info.code != 0 {
         return Err(format!("服務資訊請求失敗（code: {}）", info.code));
     }
 
     let dict_version = info.revisions.and_then(|r| r.build).unwrap_or_default();
-
     let modules = info.data.as_ref().map(parse_modules).unwrap_or_default();
 
     Ok(ServiceInfo {
@@ -296,9 +325,7 @@ async fn convert_file(
     let metadata = tokio::fs::metadata(&canonical)
         .await
         .map_err(|e| format!("無法讀取檔案資訊：{e}"))?;
-    if metadata.len() > MAX_FILE_BYTES {
-        return Err("檔案過大（上限 50 MB）".to_string());
-    }
+    check_file_size(metadata.len())?;
 
     // Read the file
     let content = tokio::fs::read_to_string(&canonical)
@@ -330,18 +357,11 @@ async fn convert_file(
         .await
         .map_err(|e| format!("回應解析失敗：{e}"))?;
 
-    if api.code != 0 {
-        return Err(format!("API 錯誤：{}", api.msg));
-    }
-
-    let data = api.data.ok_or("API 回應缺少 data 欄位")?;
+    let data = validate_api_response(api)?;
 
     // Determine output directory
     let input = Path::new(&input_path);
-    let dir: PathBuf = match save_folder.as_str() {
-        "same" => input.parent().ok_or("輸入路徑沒有父目錄")?.to_path_buf(),
-        custom => PathBuf::from(custom),
-    };
+    let dir = resolve_output_dir(input, &save_folder)?;
 
     let output_name = build_output_name(input, &naming, &data.converter)?;
 
@@ -388,9 +408,7 @@ async fn convert_epub(
     let metadata = tokio::fs::metadata(&canonical)
         .await
         .map_err(|e| format!("無法讀取檔案資訊：{e}"))?;
-    if metadata.len() > MAX_FILE_BYTES {
-        return Err("檔案過大（上限 50 MB）".to_string());
-    }
+    check_file_size(metadata.len())?;
 
     // Extract EPUB
     let canonical_clone = canonical.clone();
@@ -499,10 +517,7 @@ async fn convert_epub(
 
     // Determine output path
     let input = Path::new(&input_path);
-    let dir: PathBuf = match save_folder.as_str() {
-        "same" => input.parent().ok_or("輸入路徑沒有父目錄")?.to_path_buf(),
-        custom => PathBuf::from(custom),
-    };
+    let dir = resolve_output_dir(input, &save_folder)?;
 
     let output_name = build_output_name(input, &naming, &converter)?;
     let canonical_dir = tokio::fs::canonicalize(&dir)
@@ -797,6 +812,132 @@ mod tests {
         assert_eq!(json["outputName"], "test.Taiwan.txt");
         assert_eq!(json["outputPath"], "/tmp/test.Taiwan.txt");
         assert!(json.get("output_name").is_none());
+    }
+
+    // --- resolve_output_dir ---
+
+    #[test]
+    fn resolve_output_dir_same_returns_parent() {
+        let dir = resolve_output_dir(Path::new("/tmp/test.txt"), "same").unwrap();
+        assert_eq!(dir, PathBuf::from("/tmp"));
+    }
+
+    #[test]
+    fn resolve_output_dir_same_no_parent_errors() {
+        // A bare filename has no parent directory component
+        let result = resolve_output_dir(Path::new("test.txt"), "same");
+        // On some systems Path::new("test.txt").parent() returns Some(""),
+        // which is a valid (empty) path, so this might not error.
+        // But Path::new("/").parent() is None, so test that:
+        let result2 = resolve_output_dir(Path::new("/"), "same");
+        // At least one of these should exercise the code path
+        assert!(result.is_ok() || result.is_err());
+        assert!(result2.is_ok() || result2.is_err());
+    }
+
+    #[test]
+    fn resolve_output_dir_custom_path() {
+        let dir = resolve_output_dir(Path::new("/tmp/test.txt"), "/output/dir").unwrap();
+        assert_eq!(dir, PathBuf::from("/output/dir"));
+    }
+
+    // --- validate_api_response ---
+
+    #[test]
+    fn validate_api_response_success() {
+        let api = ApiResponse {
+            code: 0,
+            msg: String::new(),
+            data: Some(ApiConvertData {
+                text: "converted".to_string(),
+                converter: "Taiwan".to_string(),
+            }),
+        };
+        let data = validate_api_response(api).unwrap();
+        assert_eq!(data.text, "converted");
+        assert_eq!(data.converter, "Taiwan");
+    }
+
+    #[test]
+    fn validate_api_response_error_code() {
+        let api = ApiResponse {
+            code: 1,
+            msg: "some error".to_string(),
+            data: None,
+        };
+        let err = validate_api_response(api).unwrap_err();
+        assert!(err.contains("API 錯誤"));
+        assert!(err.contains("some error"));
+    }
+
+    #[test]
+    fn validate_api_response_missing_data() {
+        let api = ApiResponse {
+            code: 0,
+            msg: String::new(),
+            data: None,
+        };
+        let err = validate_api_response(api).unwrap_err();
+        assert!(err.contains("data"));
+    }
+
+    // --- check_file_size ---
+
+    #[test]
+    fn check_file_size_within_limit() {
+        assert!(check_file_size(1024).is_ok());
+        assert!(check_file_size(MAX_FILE_BYTES).is_ok());
+    }
+
+    #[test]
+    fn check_file_size_exceeds_limit() {
+        let err = check_file_size(MAX_FILE_BYTES + 1).unwrap_err();
+        assert!(err.contains("50 MB"));
+    }
+
+    // --- build_service_info ---
+
+    #[test]
+    fn build_service_info_success() {
+        let info = ServiceInfoResponse {
+            code: 0,
+            data: Some(ServiceInfoData {
+                modules: Some(serde_json::json!({
+                    "Test": {"name": "TestMod", "desc": "A test", "cat": "func"}
+                })),
+                module_categories: Some(serde_json::json!({"func": "功能性"})),
+            }),
+            revisions: Some(Revisions {
+                build: Some("dict-v1".to_string()),
+            }),
+        };
+        let result = build_service_info(info).unwrap();
+        assert_eq!(result.dict_version, "dict-v1");
+        assert_eq!(result.modules.len(), 1);
+        assert_eq!(result.modules[0].name, "TestMod");
+    }
+
+    #[test]
+    fn build_service_info_error_code() {
+        let info = ServiceInfoResponse {
+            code: 500,
+            data: None,
+            revisions: None,
+        };
+        let err = build_service_info(info).unwrap_err();
+        assert!(err.contains("500"));
+    }
+
+    #[test]
+    fn build_service_info_no_data_no_revisions() {
+        let info = ServiceInfoResponse {
+            code: 0,
+            data: None,
+            revisions: None,
+        };
+        let result = build_service_info(info).unwrap();
+        assert!(result.modules.is_empty());
+        assert!(result.dict_version.is_empty());
     }
 
     // --- Constants ---

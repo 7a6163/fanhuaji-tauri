@@ -77,6 +77,40 @@ describe("updater", () => {
       expect(mockUpdate.downloadAndInstall).toHaveBeenCalled();
     });
 
+    it("sets download complete message when Finished event received", async () => {
+      const mockUpdate = {
+        version: "2.0.0",
+        downloadAndInstall: vi
+          .fn()
+          .mockImplementation(async (cb: (event: { event: string }) => void) => {
+            cb({ event: "Finished" });
+          }),
+      };
+      mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+
+      await checkForUpdates(false);
+      const status = document.getElementById("update-status");
+      expect(status?.textContent).toBe("下載完成，即將重新啟動…");
+    });
+
+    it("does not set complete message for non-Finished events", async () => {
+      const mockUpdate = {
+        version: "2.0.0",
+        downloadAndInstall: vi
+          .fn()
+          .mockImplementation(async (cb: (event: { event: string }) => void) => {
+            cb({ event: "Progress" });
+          }),
+      };
+      mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+
+      await checkForUpdates(false);
+      const status = document.getElementById("update-status");
+      expect(status?.textContent).toBe("正在下載更新…");
+    });
+
     it("handles check error silently", async () => {
       mockCheck.mockRejectedValue(new Error("network error"));
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -110,6 +144,33 @@ describe("updater", () => {
       await vi.waitFor(() => {
         expect(mockCheck).toHaveBeenCalled();
       });
+    });
+
+    it("handles missing button gracefully", () => {
+      document.body.innerHTML = '<div id="update-status"></div>';
+      mockCheck.mockResolvedValue(null);
+      expect(() => initUpdater()).not.toThrow();
+    });
+
+    it("triggers checkForUpdates when button clicked", async () => {
+      mockCheck.mockResolvedValue(null);
+      initUpdater();
+      mockCheck.mockClear();
+
+      const btn = document.getElementById("btn-check-update") as HTMLButtonElement;
+      btn.click();
+
+      await vi.waitFor(() => {
+        expect(mockCheck).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe("setUpdateStatus edge cases", () => {
+    it("handles missing status element gracefully", async () => {
+      document.body.innerHTML = '<button id="btn-check-update"></button>';
+      mockCheck.mockResolvedValue(null);
+      await expect(checkForUpdates(false)).resolves.not.toThrow();
     });
   });
 });
