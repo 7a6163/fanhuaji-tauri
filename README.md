@@ -42,12 +42,15 @@ WEBKIT_DISABLE_DMABUF_RENDERER=1 ./Fanhuaji.AppImage
 
 ## 功能
 
-- 批次轉換多個檔案（支援 txt、srt、ass、lrc、vtt、csv、json、xml、html、md 等格式）
+- 拖放檔案即自動轉換，零點擊操作
+- 支援 txt、srt、ass、lrc、vtt、csv、json、xml、html、md、**epub** 等格式
+- EPUB 電子書轉換（逐章轉換，保留結構/CSS/圖片）
 - 多種轉換模式：繁體化、簡體化、台灣化、香港化、中國化、注音化、拼音化等
 - 詞語模組設定（自動偵測 / 啟用 / 停用）
 - 自訂取代規則（轉換前取代、轉換後取代、保護詞彙）
-- 檔案預覽與差異比較
+- 自訂輸出資料夾
 - 彈性命名方式（自動命名、覆蓋原檔、加入後綴）
+- 深色/淺色主題切換
 - 應用程式內自動更新
 
 ## 開發

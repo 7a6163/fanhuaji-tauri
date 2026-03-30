@@ -2,11 +2,24 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
-## [2.0.2] - 2026-03-29
+## [2.0.3] - 2026-03-30
+
+### Added
+
+- 自訂輸出資料夾功能（設定中選擇，持久化儲存）
+- Windows portable ZIP 版本（免安裝）
 
 ### Fixed
 
 - 主題切換按鈕在淺色/深色模式下配色不一致
+- CI 升級 codecov-action v6（Node.js 24）
+- CI 同一分支重複 push 時自動取消上一個 run
+
+### Changed
+
+- HTTP client 改為 Tauri managed state 共享（連線池複用，效能提升）
+- Rust edition 升級至 2024
+- Linux Wayland EGL workaround 自動設定
 
 ## [2.0.0] - 2026-03-29
 
