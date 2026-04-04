@@ -233,6 +233,26 @@ fn check_file_size(len: u64) -> Result<(), String> {
     Ok(())
 }
 
+fn build_warnings(errors: &[String]) -> Option<String> {
+    if errors.is_empty() {
+        None
+    } else {
+        Some(format!("部分章節失敗：{}", errors.join("；")))
+    }
+}
+
+fn build_convert_result(
+    output_name: String,
+    output_path: PathBuf,
+    warnings: Option<String>,
+) -> ConvertFileResult {
+    ConvertFileResult {
+        output_name,
+        output_path: output_path.to_string_lossy().into_owned(),
+        warnings,
+    }
+}
+
 // --- Commands ---
 
 #[tauri::command]
@@ -376,11 +396,7 @@ async fn convert_file(
         .await
         .map_err(|e| format!("無法寫入檔案：{e}"))?;
 
-    Ok(ConvertFileResult {
-        output_name,
-        output_path: output_path.to_string_lossy().into_owned(),
-        warnings: None,
-    })
+    Ok(build_convert_result(output_name, output_path, None))
 }
 
 #[tauri::command]
@@ -532,17 +548,9 @@ async fn convert_epub(
         .await
         .map_err(|e| format!("打包錯誤：{e}"))??;
 
-    let warnings = if errors.is_empty() {
-        None
-    } else {
-        Some(format!("部分章節失敗：{}", errors.join("；")))
-    };
+    let warnings = build_warnings(&errors);
 
-    Ok(ConvertFileResult {
-        output_name,
-        output_path: output_path.to_string_lossy().into_owned(),
-        warnings,
-    })
+    Ok(build_convert_result(output_name, output_path, warnings))
 }
 
 #[cfg(test)]
@@ -938,6 +946,104 @@ mod tests {
         let result = build_service_info(info).unwrap();
         assert!(result.modules.is_empty());
         assert!(result.dict_version.is_empty());
+    }
+
+    // --- build_warnings ---
+
+    #[test]
+    fn build_warnings_empty_errors() {
+        assert!(build_warnings(&[]).is_none());
+    }
+
+    #[test]
+    fn build_warnings_with_errors() {
+        let errors = vec!["ch1: failed".to_string(), "ch2: timeout".to_string()];
+        let w = build_warnings(&errors).unwrap();
+        assert!(w.contains("部分章節失敗"));
+        assert!(w.contains("ch1: failed"));
+        assert!(w.contains("ch2: timeout"));
+        assert!(w.contains("；"));
+    }
+
+    #[test]
+    fn build_warnings_single_error() {
+        let errors = vec!["ch1: failed".to_string()];
+        let w = build_warnings(&errors).unwrap();
+        assert!(w.contains("ch1: failed"));
+        assert!(!w.contains("；"));
+    }
+
+    // --- build_convert_result ---
+
+    #[test]
+    fn build_convert_result_without_warnings() {
+        let result = build_convert_result(
+            "test.Taiwan.txt".to_string(),
+            PathBuf::from("/tmp/test.Taiwan.txt"),
+            None,
+        );
+        assert_eq!(result.output_name, "test.Taiwan.txt");
+        assert_eq!(result.output_path, "/tmp/test.Taiwan.txt");
+        assert!(result.warnings.is_none());
+    }
+
+    #[test]
+    fn build_convert_result_with_warnings() {
+        let result = build_convert_result(
+            "book.epub".to_string(),
+            PathBuf::from("/tmp/book.epub"),
+            Some("部分章節失敗：ch1".to_string()),
+        );
+        assert_eq!(result.output_name, "book.epub");
+        assert!(result.warnings.is_some());
+    }
+
+    #[test]
+    fn build_convert_result_serializes_without_warnings_field() {
+        let result =
+            build_convert_result("test.txt".to_string(), PathBuf::from("/tmp/test.txt"), None);
+        let json = serde_json::to_value(&result).unwrap();
+        assert!(json.get("warnings").is_none());
+    }
+
+    #[test]
+    fn build_convert_result_serializes_with_warnings_field() {
+        let result = build_convert_result(
+            "test.txt".to_string(),
+            PathBuf::from("/tmp/test.txt"),
+            Some("warn".to_string()),
+        );
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["warnings"], "warn");
+    }
+
+    // --- EpubProgress serialization ---
+
+    #[test]
+    fn epub_progress_serializes_camel_case() {
+        let progress = EpubProgress {
+            file_id: "abc".to_string(),
+            chapter_index: 1,
+            chapter_total: 10,
+            chapter_name: "chapter1".to_string(),
+        };
+        let json = serde_json::to_value(&progress).unwrap();
+        assert_eq!(json["fileId"], "abc");
+        assert_eq!(json["chapterIndex"], 1);
+        assert_eq!(json["chapterTotal"], 10);
+        assert_eq!(json["chapterName"], "chapter1");
+        assert!(json.get("file_id").is_none());
+    }
+
+    // --- ConvertEpubParams deserialization ---
+
+    #[test]
+    fn convert_epub_params_deserializes() {
+        let json = r#"{"fileId":"f1","inputPath":"/tmp/book.epub","converter":"Taiwan","saveFolder":"same","naming":"auto","preReplace":"","postReplace":"","protectReplace":"","modules":"{}"}"#;
+        let params: ConvertEpubParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.file_id, "f1");
+        assert_eq!(params.input_path, "/tmp/book.epub");
+        assert_eq!(params.converter, "Taiwan");
     }
 
     // --- Constants ---
