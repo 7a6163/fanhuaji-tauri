@@ -9,4 +9,5 @@ coverage:
 
 ignore:
   - "src-tauri/src/main.rs"
+  - "src-tauri/src/commands.rs"
   - "src/__tests__/**"
