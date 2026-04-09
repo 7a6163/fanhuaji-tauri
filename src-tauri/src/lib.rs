@@ -134,13 +134,23 @@ pub(crate) fn build_output_name(
             .ok_or("無法取得檔案名稱")?
             .to_string_lossy()
             .into_owned()),
-        "suffix" => Ok(format!("{stem}.converted.{ext}")),
+        "suffix" => {
+            if ext.is_empty() {
+                Ok(format!("{stem}.converted"))
+            } else {
+                Ok(format!("{stem}.converted.{ext}"))
+            }
+        }
         _ => {
             let converter_suffix = sanitize_filename_part(converter);
             if converter_suffix.is_empty() {
                 return Err("API 回應包含無效的轉換器名稱".to_string());
             }
-            Ok(format!("{stem}.{converter_suffix}.{ext}"))
+            if ext.is_empty() {
+                Ok(format!("{stem}.{converter_suffix}"))
+            } else {
+                Ok(format!("{stem}.{converter_suffix}.{ext}"))
+            }
         }
     }
 }
@@ -330,9 +340,15 @@ mod tests {
     }
 
     #[test]
-    fn output_name_no_extension() {
+    fn output_name_no_extension_suffix() {
         let result = build_output_name(Path::new("/tmp/README"), "suffix", "Taiwan");
-        assert_eq!(result.unwrap(), "README.converted.");
+        assert_eq!(result.unwrap(), "README.converted");
+    }
+
+    #[test]
+    fn output_name_no_extension_auto() {
+        let result = build_output_name(Path::new("/tmp/README"), "auto", "Taiwan");
+        assert_eq!(result.unwrap(), "README.Taiwan");
     }
 
     #[test]
@@ -533,11 +549,10 @@ mod tests {
     }
 
     #[test]
-    fn resolve_output_dir_same_no_parent_errors() {
-        let result = resolve_output_dir(Path::new("test.txt"), "same");
-        let result2 = resolve_output_dir(Path::new("/"), "same");
-        assert!(result.is_ok() || result.is_err());
-        assert!(result2.is_ok() || result2.is_err());
+    fn resolve_output_dir_same_bare_filename_returns_empty_path() {
+        // Path::new("test.txt").parent() returns Some(""), an empty path
+        let dir = resolve_output_dir(Path::new("test.txt"), "same").unwrap();
+        assert_eq!(dir, PathBuf::from(""));
     }
 
     #[test]

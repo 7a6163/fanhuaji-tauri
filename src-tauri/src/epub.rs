@@ -23,6 +23,12 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
 
     let temp_dir = TempDir::new().map_err(|e| format!("無法建立暫存目錄：{e}"))?;
 
+    // Canonicalize once to handle symlinks (e.g. macOS /tmp -> /private/tmp)
+    let temp_root = temp_dir
+        .path()
+        .canonicalize()
+        .map_err(|e| format!("無法解析暫存目錄：{e}"))?;
+
     // Extract all files
     for i in 0..archive.len() {
         let mut entry = archive
@@ -31,15 +37,14 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
         let name = entry.name().to_string();
 
         if entry.is_dir() {
-            fs::create_dir_all(temp_dir.path().join(&name))
-                .map_err(|e| format!("無法建立目錄：{e}"))?;
+            fs::create_dir_all(temp_root.join(&name)).map_err(|e| format!("無法建立目錄：{e}"))?;
             continue;
         }
 
-        let out_path = temp_dir.path().join(&name);
+        let out_path = temp_root.join(&name);
 
         // Prevent ZIP path traversal
-        if !out_path.starts_with(temp_dir.path()) {
+        if !out_path.starts_with(&temp_root) {
             return Err(format!("EPUB 包含不安全的路徑：{name}"));
         }
 
@@ -55,7 +60,7 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
     }
 
     // Find content files by scanning for .xhtml/.html files
-    let content_files = find_content_files(temp_dir.path())?;
+    let content_files = find_content_files(&temp_root)?;
 
     Ok((temp_dir, content_files))
 }

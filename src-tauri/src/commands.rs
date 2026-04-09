@@ -6,7 +6,7 @@ use crate::{
     resolve_output_dir, validate_api_response,
 };
 use std::path::Path;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
@@ -171,9 +171,8 @@ pub async fn convert_epub(
     check_file_size(metadata.len())?;
 
     // Extract EPUB
-    let canonical_clone = canonical.clone();
     let (temp_dir, content_files) =
-        tokio::task::spawn_blocking(move || epub::extract_epub(&canonical_clone))
+        tokio::task::spawn_blocking(move || epub::extract_epub(&canonical))
             .await
             .map_err(|e| format!("解壓錯誤：{e}"))??;
 
@@ -186,7 +185,7 @@ pub async fn convert_epub(
         let chapter_name = epub::chapter_display_name(&content_file.relative_path);
 
         // Emit progress
-        let _ = app.emit(
+        if let Err(e) = app.emit(
             "epub-progress",
             EpubProgress {
                 file_id: file_id.clone(),
@@ -194,7 +193,9 @@ pub async fn convert_epub(
                 chapter_total,
                 chapter_name: chapter_name.clone(),
             },
-        );
+        ) {
+            eprintln!("Failed to emit epub-progress: {e}");
+        }
 
         let file_path = temp_dir.path().join(&content_file.relative_path);
         let xhtml = match tokio::fs::read_to_string(&file_path).await {
@@ -307,16 +308,16 @@ pub async fn convert_epub(
 
 pub fn run() {
     tauri::Builder::default()
-        .manage(HttpClient(
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .expect("無法建立 HTTP 客戶端"),
-        ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .map_err(|e| format!("無法建立 HTTP 客戶端：{e}"))?;
+            app.manage(HttpClient(client));
+
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
