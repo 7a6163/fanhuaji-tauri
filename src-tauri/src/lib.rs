@@ -74,6 +74,8 @@ pub(crate) struct ConvertFileParams {
     pub converter: String,
     pub save_folder: String,
     pub naming: String,
+    #[serde(default)]
+    pub custom_suffix: String,
     pub pre_replace: String,
     pub post_replace: String,
     pub protect_replace: String,
@@ -88,6 +90,8 @@ pub(crate) struct ConvertEpubParams {
     pub converter: String,
     pub save_folder: String,
     pub naming: String,
+    #[serde(default)]
+    pub custom_suffix: String,
     pub pre_replace: String,
     pub post_replace: String,
     pub protect_replace: String,
@@ -121,6 +125,7 @@ pub(crate) fn build_output_name(
     input: &Path,
     naming: &str,
     converter: &str,
+    custom_suffix: &str,
 ) -> Result<String, String> {
     let stem = input
         .file_stem()
@@ -128,20 +133,35 @@ pub(crate) fn build_output_name(
         .to_string_lossy();
     let ext = input.extension().unwrap_or_default().to_string_lossy();
 
-    match naming {
-        "overwrite" => Ok(input
-            .file_name()
-            .ok_or("無法取得檔案名稱")?
-            .to_string_lossy()
-            .into_owned()),
-        "suffix" => Ok(format!("{stem}.converted.{ext}")),
+    let suffix = match naming {
+        "overwrite" => {
+            return Ok(input
+                .file_name()
+                .ok_or("無法取得檔案名稱")?
+                .to_string_lossy()
+                .into_owned());
+        }
+        "suffix" => {
+            let s = sanitize_filename_part(custom_suffix);
+            if s.is_empty() {
+                "converted".to_string()
+            } else {
+                s
+            }
+        }
         _ => {
-            let converter_suffix = sanitize_filename_part(converter);
-            if converter_suffix.is_empty() {
+            let s = sanitize_filename_part(converter);
+            if s.is_empty() {
                 return Err("API 回應包含無效的轉換器名稱".to_string());
             }
-            Ok(format!("{stem}.{converter_suffix}.{ext}"))
+            s
         }
+    };
+
+    if ext.is_empty() {
+        Ok(format!("{stem}.{suffix}"))
+    } else {
+        Ok(format!("{stem}.{suffix}.{ext}"))
     }
 }
 
@@ -300,44 +320,62 @@ mod tests {
 
     #[test]
     fn output_name_overwrite_mode() {
-        let result = build_output_name(Path::new("/tmp/test.srt"), "overwrite", "Taiwan");
+        let result = build_output_name(Path::new("/tmp/test.srt"), "overwrite", "Taiwan", "");
         assert_eq!(result.unwrap(), "test.srt");
     }
 
     #[test]
-    fn output_name_suffix_mode() {
-        let result = build_output_name(Path::new("/tmp/test.srt"), "suffix", "Taiwan");
+    fn output_name_suffix_default() {
+        let result = build_output_name(Path::new("/tmp/test.srt"), "suffix", "Taiwan", "");
         assert_eq!(result.unwrap(), "test.converted.srt");
     }
 
     #[test]
+    fn output_name_suffix_custom() {
+        let result = build_output_name(Path::new("/tmp/test.srt"), "suffix", "Taiwan", "zh-tw");
+        assert_eq!(result.unwrap(), "test.zh-tw.srt");
+    }
+
+    #[test]
+    fn output_name_suffix_special_chars_sanitized() {
+        let result = build_output_name(Path::new("/tmp/test.srt"), "suffix", "Taiwan", "a/b:c");
+        assert_eq!(result.unwrap(), "test.abc.srt");
+    }
+
+    #[test]
     fn output_name_auto_mode() {
-        let result = build_output_name(Path::new("/tmp/test.srt"), "auto", "Taiwan");
+        let result = build_output_name(Path::new("/tmp/test.srt"), "auto", "Taiwan", "");
         assert_eq!(result.unwrap(), "test.Taiwan.srt");
     }
 
     #[test]
     fn output_name_auto_with_special_converter() {
-        let result = build_output_name(Path::new("/tmp/test.txt"), "auto", "Wiki/Traditional");
+        let result = build_output_name(Path::new("/tmp/test.txt"), "auto", "Wiki/Traditional", "");
         assert_eq!(result.unwrap(), "test.WikiTraditional.txt");
     }
 
     #[test]
     fn output_name_auto_empty_converter_fails() {
-        let result = build_output_name(Path::new("/tmp/test.txt"), "auto", "!@#$");
+        let result = build_output_name(Path::new("/tmp/test.txt"), "auto", "!@#$", "");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("無效的轉換器名稱"));
     }
 
     #[test]
-    fn output_name_no_extension() {
-        let result = build_output_name(Path::new("/tmp/README"), "suffix", "Taiwan");
-        assert_eq!(result.unwrap(), "README.converted.");
+    fn output_name_no_extension_suffix() {
+        let result = build_output_name(Path::new("/tmp/README"), "suffix", "Taiwan", "");
+        assert_eq!(result.unwrap(), "README.converted");
+    }
+
+    #[test]
+    fn output_name_no_extension_auto() {
+        let result = build_output_name(Path::new("/tmp/README"), "auto", "Taiwan", "");
+        assert_eq!(result.unwrap(), "README.Taiwan");
     }
 
     #[test]
     fn output_name_chinese_filename() {
-        let result = build_output_name(Path::new("/tmp/字幕.srt"), "auto", "Taiwan");
+        let result = build_output_name(Path::new("/tmp/字幕.srt"), "auto", "Taiwan", "");
         assert_eq!(result.unwrap(), "字幕.Taiwan.srt");
     }
 

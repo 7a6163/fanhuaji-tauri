@@ -9,7 +9,7 @@
     <div class="app">
       <!-- Header -->
       <header class="header">
-        <span class="app-title">繁化姬</span>
+        <span class="header-spacer"></span>
         <button type="button" id="btn-settings" class="icon-btn" title="設定">
           <i class="ti ti-settings"></i>
         </button>
@@ -51,8 +51,8 @@
       </footer>
 
       <!-- Settings drawer -->
-      <div id="settings-backdrop" class="settings-backdrop hidden"></div>
-      <aside id="settings-drawer" class="settings-drawer hidden">
+      <div id="settings-backdrop" class="settings-backdrop"></div>
+      <aside id="settings-drawer" class="settings-drawer">
         <div class="drawer-header">
           <h2>設定</h2>
           <button type="button" id="btn-close-settings" class="icon-btn">
@@ -101,9 +101,13 @@
               <label class="setting-label">命名方式</label>
               <select id="naming">
                 <option value="auto">自動命名</option>
+                <option value="suffix">自訂後綴</option>
                 <option value="overwrite">覆蓋原檔</option>
-                <option value="suffix">加入後綴</option>
               </select>
+              <div id="suffix-input-wrapper" class="suffix-input-wrapper hidden">
+                <label class="setting-label">後綴名稱</label>
+                <input type="text" id="custom-suffix" placeholder="converted" value="converted" />
+              </div>
             </section>
           </div>
 

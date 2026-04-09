@@ -45,6 +45,7 @@ interface ModuleInfo {
 const STORAGE_KEYS = {
   converter: "fanhuaji-converter",
   naming: "fanhuaji-naming",
+  customSuffix: "fanhuaji-custom-suffix",
   preReplace: "fanhuaji-pre-replace",
   postReplace: "fanhuaji-post-replace",
   protectReplace: "fanhuaji-protect-replace",
@@ -207,7 +208,6 @@ async function convertPending() {
   const converter = converterEl?.value ?? "Taiwan";
 
   const saveFolderEl = document.getElementById("save-folder") as HTMLSelectElement | null;
-  const namingEl = document.getElementById("naming") as HTMLSelectElement | null;
   const preReplace =
     (document.getElementById("pre-replace") as HTMLTextAreaElement | null)?.value ?? "";
   const postReplace =
@@ -240,6 +240,8 @@ async function convertPending() {
           converter,
           saveFolder: saveFolderEl?.value ?? "same",
           naming: namingEl?.value ?? "auto",
+          customSuffix:
+            (document.getElementById("custom-suffix") as HTMLInputElement | null)?.value ?? "",
           preReplace,
           postReplace,
           protectReplace,
@@ -282,18 +284,21 @@ async function convertPending() {
 // --- Settings drawer ---
 
 function openSettings() {
-  $<HTMLDivElement>("#settings-backdrop").classList.remove("hidden");
-  $<HTMLElement>("#settings-drawer").classList.remove("hidden");
+  $<HTMLDivElement>("#settings-backdrop").classList.add("visible");
+  $<HTMLElement>("#settings-drawer").classList.add("visible");
 }
 
 function closeSettings() {
-  $<HTMLDivElement>("#settings-backdrop").classList.add("hidden");
-  $<HTMLElement>("#settings-drawer").classList.add("hidden");
+  $<HTMLDivElement>("#settings-backdrop").classList.remove("visible");
+  $<HTMLElement>("#settings-drawer").classList.remove("visible");
 }
 
 $<HTMLButtonElement>("#btn-settings").addEventListener("click", openSettings);
 $<HTMLButtonElement>("#btn-close-settings").addEventListener("click", closeSettings);
 $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSettings();
+});
 
 // --- Restore persisted settings ---
 
@@ -325,6 +330,26 @@ restoreSetting("protect-replace", STORAGE_KEYS.protectReplace);
 persistOnChange("converter", STORAGE_KEYS.converter);
 persistOnChange("naming", STORAGE_KEYS.naming);
 persistOnChange("pre-replace", STORAGE_KEYS.preReplace);
+
+// Custom suffix input — show/hide based on naming selection
+const namingEl = document.getElementById("naming") as HTMLSelectElement | null;
+const suffixWrapper = document.getElementById("suffix-input-wrapper");
+const customSuffixInput = document.getElementById("custom-suffix") as HTMLInputElement | null;
+
+function updateSuffixVisibility() {
+  suffixWrapper?.classList.toggle("hidden", namingEl?.value !== "suffix");
+}
+
+// Restore custom suffix
+const savedSuffix = localStorage.getItem(STORAGE_KEYS.customSuffix);
+if (customSuffixInput && savedSuffix) customSuffixInput.value = savedSuffix;
+
+customSuffixInput?.addEventListener("input", () => {
+  localStorage.setItem(STORAGE_KEYS.customSuffix, customSuffixInput.value);
+});
+
+namingEl?.addEventListener("change", updateSuffixVisibility);
+updateSuffixVisibility();
 persistOnChange("post-replace", STORAGE_KEYS.postReplace);
 persistOnChange("protect-replace", STORAGE_KEYS.protectReplace);
 

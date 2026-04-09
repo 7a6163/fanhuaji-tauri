@@ -70,6 +70,7 @@ pub async fn convert_file(
         converter,
         save_folder,
         naming,
+        custom_suffix,
         pre_replace,
         post_replace,
         protect_replace,
@@ -123,7 +124,7 @@ pub async fn convert_file(
     let input = Path::new(&input_path);
     let dir = resolve_output_dir(input, &save_folder)?;
 
-    let output_name = build_output_name(input, &naming, &data.converter)?;
+    let output_name = build_output_name(input, &naming, &data.converter, &custom_suffix)?;
 
     // Build output path from canonical directory to prevent traversal
     let canonical_dir = tokio::fs::canonicalize(&dir)
@@ -155,6 +156,7 @@ pub async fn convert_epub(
         converter,
         save_folder,
         naming,
+        custom_suffix,
         pre_replace,
         post_replace,
         protect_replace,
@@ -279,7 +281,7 @@ pub async fn convert_epub(
     let input = Path::new(&input_path);
     let dir = resolve_output_dir(input, &save_folder)?;
 
-    let output_name = build_output_name(input, &naming, &converter)?;
+    let output_name = build_output_name(input, &naming, &converter, &custom_suffix)?;
     let canonical_dir = tokio::fs::canonicalize(&dir)
         .await
         .map_err(|e| format!("輸出目錄無效：{e}"))?;
