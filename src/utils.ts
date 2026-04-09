@@ -1,3 +1,5 @@
+import { t } from "./i18n/i18n";
+
 export function escHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -8,13 +10,14 @@ export function escHtml(s: string): string {
 }
 
 export function statusLabel(s: string): string {
-  const map: Record<string, string> = {
-    pending: "待轉換",
-    converting: "轉換中…",
-    success: "完成",
-    error: "錯誤",
+  const keyMap: Record<string, string> = {
+    pending: "status.pending",
+    converting: "status.converting",
+    success: "status.done",
+    error: "status.errorLabel",
   };
-  return map[s] ?? s;
+  const key = keyMap[s];
+  return key ? t(key) : s;
 }
 
 export interface FileEntry {

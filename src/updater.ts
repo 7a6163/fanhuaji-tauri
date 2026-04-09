@@ -1,5 +1,6 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
+import { t } from "./i18n/i18n";
 
 function setUpdateStatus(msg: string) {
   const el = document.getElementById("update-status");
@@ -7,31 +8,31 @@ function setUpdateStatus(msg: string) {
 }
 
 export async function checkForUpdates(silent = false): Promise<void> {
-  if (!silent) setUpdateStatus("正在檢查…");
+  if (!silent) setUpdateStatus(t("update.checking"));
 
   try {
     const update = await check();
     if (!update) {
-      setUpdateStatus(silent ? "" : "目前已是最新版本。");
+      setUpdateStatus(silent ? "" : t("update.upToDate"));
       return;
     }
 
-    setUpdateStatus(`發現新版本 ${update.version}`);
-    const confirmed = window.confirm(`發現新版本 ${update.version}，是否要下載並安裝？`);
+    setUpdateStatus(t("update.found", { version: update.version }));
+    const confirmed = window.confirm(t("update.confirm", { version: update.version }));
     if (!confirmed) return;
 
-    setUpdateStatus("正在下載更新…");
+    setUpdateStatus(t("update.downloading"));
 
     await update.downloadAndInstall((event) => {
       if (event.event === "Finished") {
-        setUpdateStatus("下載完成，即將重新啟動…");
+        setUpdateStatus(t("update.restarting"));
       }
     });
 
     await relaunch();
   } catch (err) {
     if (!silent) {
-      setUpdateStatus(`檢查更新失敗：${String(err)}`);
+      setUpdateStatus(t("update.failed", { error: String(err) }));
     }
     // Update check failed — status already shown in UI if not silent
   }

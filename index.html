@@ -10,7 +10,7 @@
       <!-- Header -->
       <header class="header">
         <span class="header-spacer"></span>
-        <button type="button" id="btn-settings" class="icon-btn" title="設定">
+        <button type="button" id="btn-settings" class="icon-btn" data-i18n-title="header.settings" title="設定">
           <i class="ti ti-settings"></i>
         </button>
       </header>
@@ -20,16 +20,16 @@
         <!-- Empty state: drop zone -->
         <div id="drop-zone" class="drop-zone" role="button" tabindex="0">
           <i class="ti ti-cloud-upload"></i>
-          <span class="drop-title">拖放檔案到此處</span>
-          <span class="drop-subtitle">或 點擊開啟檔案</span>
-          <span class="drop-formats">支援 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB</span>
+          <span class="drop-title" data-i18n="drop.title">拖放檔案到此處</span>
+          <span class="drop-subtitle" data-i18n="drop.subtitle">或 點擊開啟檔案</span>
+          <span class="drop-formats" data-i18n="drop.formats">支援 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB</span>
         </div>
 
         <!-- File list (shown when files exist) -->
         <div id="file-list" class="file-list hidden">
           <div id="file-items" class="file-items"></div>
           <button type="button" id="btn-add-more" class="add-more-btn">
-            <i class="ti ti-plus"></i>加入更多檔案
+            <i class="ti ti-plus"></i><span data-i18n="files.addMore">加入更多檔案</span>
           </button>
         </div>
       </main>
@@ -41,71 +41,71 @@
 
       <!-- Status bar -->
       <footer id="status-bar" class="status-bar hidden">
-        <span class="status-badge blue">全部: <span id="count-total">0</span></span>
-        <span class="status-badge green">完成: <span id="count-success">0</span></span>
-        <span class="status-badge red">錯誤: <span id="count-error">0</span></span>
+        <span class="status-badge blue"><span data-i18n="status.total">全部:</span> <span id="count-total">0</span></span>
+        <span class="status-badge green"><span data-i18n="status.success">完成:</span> <span id="count-success">0</span></span>
+        <span class="status-badge red"><span data-i18n="status.error">錯誤:</span> <span id="count-error">0</span></span>
         <span class="status-spacer"></span>
-        <button type="button" id="btn-convert" class="status-action accent hidden">開始轉換</button>
-        <button type="button" id="btn-clear" class="status-action">清除列表</button>
-        <button type="button" id="btn-retry" class="status-action hidden">重試失敗</button>
+        <button type="button" id="btn-convert" class="status-action accent hidden" data-i18n="status.convert">開始轉換</button>
+        <button type="button" id="btn-clear" class="status-action" data-i18n="status.clear">清除列表</button>
+        <button type="button" id="btn-retry" class="status-action hidden" data-i18n="status.retry">重試失敗</button>
       </footer>
 
       <!-- Settings drawer -->
       <div id="settings-backdrop" class="settings-backdrop"></div>
       <aside id="settings-drawer" class="settings-drawer">
         <div class="drawer-header">
-          <h2>設定</h2>
+          <h2 data-i18n="settings.title">設定</h2>
           <button type="button" id="btn-close-settings" class="icon-btn">
             <i class="ti ti-x"></i>
           </button>
         </div>
         <nav class="drawer-tabs">
-          <button type="button" class="drawer-tab active" data-drawer-tab="convert">轉換</button>
-          <button type="button" class="drawer-tab" data-drawer-tab="replace">取代</button>
-          <button type="button" class="drawer-tab" data-drawer-tab="modules">模組</button>
-          <button type="button" class="drawer-tab" data-drawer-tab="general">一般</button>
+          <button type="button" class="drawer-tab active" data-drawer-tab="convert" data-i18n="settings.tab.convert">轉換</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="replace" data-i18n="settings.tab.replace">取代</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="modules" data-i18n="settings.tab.modules">模組</button>
+          <button type="button" class="drawer-tab" data-drawer-tab="general" data-i18n="settings.tab.general">一般</button>
         </nav>
         <div class="drawer-body">
           <!-- 轉換 -->
           <div class="drawer-panel active" data-panel="convert">
             <section class="setting-section">
-              <h3><i class="ti ti-transform"></i> 轉換模式</h3>
+              <h3><i class="ti ti-transform"></i> <span data-i18n="settings.converter.title">轉換模式</span></h3>
               <select id="converter">
-                <optgroup label="繁簡">
-                  <option value="Traditional">繁體化</option>
-                  <option value="Simplified">簡體化</option>
+                <optgroup label="繁簡" data-i18n-label="converter.group.traditional">
+                  <option value="Traditional" data-i18n="converter.Traditional">繁體化</option>
+                  <option value="Simplified" data-i18n="converter.Simplified">簡體化</option>
                 </optgroup>
-                <optgroup label="本地化">
-                  <option value="China">中國化</option>
-                  <option value="Hongkong">香港化</option>
-                  <option value="Taiwan" selected>台灣化</option>
+                <optgroup label="本地化" data-i18n-label="converter.group.localize">
+                  <option value="China" data-i18n="converter.China">中國化</option>
+                  <option value="Hongkong" data-i18n="converter.Hongkong">香港化</option>
+                  <option value="Taiwan" selected data-i18n="converter.Taiwan">台灣化</option>
                 </optgroup>
-                <optgroup label="其他">
-                  <option value="Bopomofo">注音化</option>
-                  <option value="Mars">火星化</option>
-                  <option value="Pinyin">拼音化</option>
+                <optgroup label="其他" data-i18n-label="converter.group.other">
+                  <option value="Bopomofo" data-i18n="converter.Bopomofo">注音化</option>
+                  <option value="Mars" data-i18n="converter.Mars">火星化</option>
+                  <option value="Pinyin" data-i18n="converter.Pinyin">拼音化</option>
                 </optgroup>
-                <optgroup label="第三方服務">
-                  <option value="WikiSimplified">維基簡體化</option>
-                  <option value="WikiTraditional">維基繁體化</option>
+                <optgroup label="第三方服務" data-i18n-label="converter.group.thirdParty">
+                  <option value="WikiSimplified" data-i18n="converter.WikiSimplified">維基簡體化</option>
+                  <option value="WikiTraditional" data-i18n="converter.WikiTraditional">維基繁體化</option>
                 </optgroup>
               </select>
             </section>
             <section class="setting-section">
-              <h3><i class="ti ti-folder"></i> 存檔選項</h3>
-              <label class="setting-label">存檔資料夾</label>
+              <h3><i class="ti ti-folder"></i> <span data-i18n="settings.save.title">存檔選項</span></h3>
+              <label class="setting-label" data-i18n="settings.save.folderLabel">存檔資料夾</label>
               <select id="save-folder">
-                <option value="same">輸入檔所在資料夾</option>
-                <option value="custom">自訂資料夾…</option>
+                <option value="same" data-i18n="settings.save.same">輸入檔所在資料夾</option>
+                <option value="custom" data-i18n="settings.save.custom">自訂資料夾…</option>
               </select>
-              <label class="setting-label">命名方式</label>
+              <label class="setting-label" data-i18n="settings.save.namingLabel">命名方式</label>
               <select id="naming">
-                <option value="auto">自動命名</option>
-                <option value="suffix">自訂後綴</option>
-                <option value="overwrite">覆蓋原檔</option>
+                <option value="auto" data-i18n="settings.save.naming.auto">自動命名</option>
+                <option value="suffix" data-i18n="settings.save.naming.suffix">自訂後綴</option>
+                <option value="overwrite" data-i18n="settings.save.naming.overwrite">覆蓋原檔</option>
               </select>
               <div id="suffix-input-wrapper" class="suffix-input-wrapper hidden">
-                <label class="setting-label">後綴名稱</label>
+                <label class="setting-label" data-i18n="settings.save.suffixLabel">後綴名稱</label>
                 <input type="text" id="custom-suffix" placeholder="converted" value="converted" />
               </div>
             </section>
@@ -114,20 +114,20 @@
           <!-- 取代 -->
           <div class="drawer-panel" data-panel="replace">
             <section class="setting-section">
-              <h3><i class="ti ti-replace"></i> 自訂取代</h3>
-              <label class="setting-label">轉換前取代</label>
-              <textarea id="pre-replace" placeholder="搜尋=取代（每行一組）" rows="4"></textarea>
-              <label class="setting-label">轉換後取代</label>
-              <textarea id="post-replace" placeholder="搜尋=取代（每行一組）" rows="4"></textarea>
-              <label class="setting-label">保護詞彙（不轉換）</label>
-              <textarea id="protect-replace" placeholder="每行一個詞彙" rows="4"></textarea>
+              <h3><i class="ti ti-replace"></i> <span data-i18n="settings.replace.title">自訂取代</span></h3>
+              <label class="setting-label" data-i18n="settings.replace.preLabel">轉換前取代</label>
+              <textarea id="pre-replace" data-i18n-placeholder="settings.replace.pairPlaceholder" placeholder="搜尋=取代（每行一組）" rows="4"></textarea>
+              <label class="setting-label" data-i18n="settings.replace.postLabel">轉換後取代</label>
+              <textarea id="post-replace" data-i18n-placeholder="settings.replace.pairPlaceholder" placeholder="搜尋=取代（每行一組）" rows="4"></textarea>
+              <label class="setting-label" data-i18n="settings.replace.protectLabel">保護詞彙（不轉換）</label>
+              <textarea id="protect-replace" data-i18n-placeholder="settings.replace.protectPlaceholder" placeholder="每行一個詞彙" rows="4"></textarea>
             </section>
           </div>
 
           <!-- 模組 -->
           <div class="drawer-panel" data-panel="modules">
             <section class="setting-section">
-              <h3><i class="ti ti-puzzle"></i> 詞語模組</h3>
+              <h3><i class="ti ti-puzzle"></i> <span data-i18n="settings.modules.title">詞語模組</span></h3>
               <div id="module-categories" class="module-categories"></div>
               <div id="module-list" class="module-list"></div>
             </section>
@@ -136,44 +136,52 @@
           <!-- 一般 -->
           <div class="drawer-panel" data-panel="general">
             <section class="setting-section">
-              <h3><i class="ti ti-palette"></i> 外觀</h3>
+              <h3><i class="ti ti-language"></i> <span data-i18n="settings.language.title">語言</span></h3>
+              <select id="locale-select">
+                <option value="en">English</option>
+                <option value="zh-CN">简体中文</option>
+                <option value="zh-TW">正體中文</option>
+              </select>
+            </section>
+            <section class="setting-section">
+              <h3><i class="ti ti-palette"></i> <span data-i18n="settings.appearance.title">外觀</span></h3>
               <div class="theme-options" id="theme-options">
                 <button type="button" class="theme-option active" data-theme="system">
-                  <i class="ti ti-device-desktop"></i>系統
+                  <i class="ti ti-device-desktop"></i><span data-i18n="theme.system">系統</span>
                 </button>
                 <button type="button" class="theme-option" data-theme="light">
-                  <i class="ti ti-sun"></i>淺色
+                  <i class="ti ti-sun"></i><span data-i18n="theme.light">淺色</span>
                 </button>
                 <button type="button" class="theme-option" data-theme="dark">
-                  <i class="ti ti-moon"></i>深色
+                  <i class="ti ti-moon"></i><span data-i18n="theme.dark">深色</span>
                 </button>
               </div>
             </section>
             <section class="setting-section">
-              <h3><i class="ti ti-refresh"></i> 更新</h3>
+              <h3><i class="ti ti-refresh"></i> <span data-i18n="settings.update.title">更新</span></h3>
               <button type="button" id="btn-check-update" class="action-btn">
-                <i class="ti ti-cloud-download"></i>檢查更新
+                <i class="ti ti-cloud-download"></i><span data-i18n="settings.update.check">檢查更新</span>
               </button>
               <span id="update-status" class="update-status"></span>
             </section>
             <section class="setting-section">
-              <h3><i class="ti ti-robot"></i> 行為</h3>
+              <h3><i class="ti ti-robot"></i> <span data-i18n="settings.behavior.title">行為</span></h3>
               <label class="setting-toggle">
                 <input type="checkbox" id="auto-convert" checked />
-                <span>拖入檔案後自動開始轉換</span>
+                <span data-i18n="settings.behavior.autoConvert">拖入檔案後自動開始轉換</span>
               </label>
             </section>
             <section class="setting-section">
-              <h3><i class="ti ti-info-circle"></i> 關於</h3>
+              <h3><i class="ti ti-info-circle"></i> <span data-i18n="settings.about.title">關於</span></h3>
               <div class="about-info">
-                <span>版本 <span id="app-version"></span></span>
+                <span><span data-i18n="settings.about.version">版本</span> <span id="app-version"></span></span>
                 <a class="link" data-href="https://zhconvert.org">zhconvert.org</a>
-                <a class="link" data-href="https://docs.zhconvert.org/license/">授權條款</a>
+                <a class="link" data-href="https://docs.zhconvert.org/license/" data-i18n="settings.about.license">授權條款</a>
                 <a class="link" data-href="https://github.com/7a6163/fanhuaji-tauri">GitHub</a>
               </div>
-              <div class="api-notice">
-                本程式使用了<a class="link" data-href="https://zhconvert.org">繁化姬</a>的 API 服務。<a class="link" data-href="https://docs.zhconvert.org/license/">商業使用請參閱繁化姬授權條款</a>。
-              </div>
+              <p class="api-notice" data-i18n="settings.about.apiNotice">
+                本程式使用了繁化姬的 API 服務。商業使用請參閱繁化姬授權條款。
+              </p>
             </section>
           </div>
         </div>
