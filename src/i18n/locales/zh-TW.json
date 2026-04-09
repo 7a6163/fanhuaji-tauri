@@ -1,0 +1,99 @@
+{
+  "app.title": "繁化姬",
+  "header.settings": "設定",
+
+  "drop.title": "拖放檔案到此處",
+  "drop.subtitle": "或 點擊開啟檔案",
+  "drop.formats": "支援 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB",
+
+  "files.addMore": "加入更多檔案",
+
+  "status.total": "全部:",
+  "status.success": "完成:",
+  "status.error": "錯誤:",
+  "status.convert": "開始轉換",
+  "status.clear": "清除列表",
+  "status.retry": "重試失敗",
+
+  "settings.title": "設定",
+  "settings.tab.convert": "轉換",
+  "settings.tab.replace": "取代",
+  "settings.tab.modules": "模組",
+  "settings.tab.general": "一般",
+
+  "settings.converter.title": "轉換模式",
+  "converter.group.traditional": "繁簡",
+  "converter.group.localize": "本地化",
+  "converter.group.other": "其他",
+  "converter.group.thirdParty": "第三方服務",
+  "converter.Traditional": "繁體化",
+  "converter.Simplified": "簡體化",
+  "converter.China": "中國化",
+  "converter.Hongkong": "香港化",
+  "converter.Taiwan": "台灣化",
+  "converter.Bopomofo": "注音化",
+  "converter.Mars": "火星化",
+  "converter.Pinyin": "拼音化",
+  "converter.WikiSimplified": "維基簡體化",
+  "converter.WikiTraditional": "維基繁體化",
+
+  "settings.save.title": "存檔選項",
+  "settings.save.folderLabel": "存檔資料夾",
+  "settings.save.same": "輸入檔所在資料夾",
+  "settings.save.custom": "自訂資料夾…",
+  "settings.save.namingLabel": "命名方式",
+  "settings.save.naming.auto": "自動命名",
+  "settings.save.naming.suffix": "自訂後綴",
+  "settings.save.naming.overwrite": "覆蓋原檔",
+  "settings.save.suffixLabel": "後綴名稱",
+
+  "settings.replace.title": "自訂取代",
+  "settings.replace.preLabel": "轉換前取代",
+  "settings.replace.postLabel": "轉換後取代",
+  "settings.replace.protectLabel": "保護詞彙（不轉換）",
+  "settings.replace.pairPlaceholder": "搜尋=取代（每行一組）",
+  "settings.replace.protectPlaceholder": "每行一個詞彙",
+
+  "settings.modules.title": "詞語模組",
+  "module.auto": "自動",
+  "module.enable": "啟用",
+  "module.disable": "停用",
+
+  "settings.language.title": "語言",
+
+  "settings.appearance.title": "外觀",
+  "theme.system": "系統",
+  "theme.light": "淺色",
+  "theme.dark": "深色",
+
+  "settings.update.title": "更新",
+  "settings.update.check": "檢查更新",
+
+  "settings.behavior.title": "行為",
+  "settings.behavior.autoConvert": "拖入檔案後自動開始轉換",
+
+  "settings.about.title": "關於",
+  "settings.about.version": "版本",
+  "settings.about.license": "授權條款",
+  "settings.about.apiNotice": "本程式使用了繁化姬的 API 服務。商業使用請參閱繁化姬授權條款。",
+
+  "file.convertDone": "轉換完成",
+  "file.convertDoneWithWarnings": "轉換完成（{warnings}）",
+  "file.converting": "轉換中…",
+  "file.convertingChapter": "轉換中… ({current}/{total} {name})",
+
+  "dom.missingElement": "必要元素不存在：{selector}",
+
+  "update.checking": "正在檢查…",
+  "update.upToDate": "目前已是最新版本。",
+  "update.found": "發現新版本 {version}",
+  "update.confirm": "發現新版本 {version}，是否要下載並安裝？",
+  "update.downloading": "正在下載更新…",
+  "update.restarting": "下載完成，即將重新啟動…",
+  "update.failed": "檢查更新失敗：{error}",
+
+  "status.pending": "待轉換",
+  "status.converting": "轉換中…",
+  "status.done": "完成",
+  "status.errorLabel": "錯誤"
+}

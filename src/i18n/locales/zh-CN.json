@@ -1,0 +1,99 @@
+{
+  "app.title": "繁化姬",
+  "header.settings": "设置",
+
+  "drop.title": "拖放文件到此处",
+  "drop.subtitle": "或 点击打开文件",
+  "drop.formats": "支持 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB",
+
+  "files.addMore": "添加更多文件",
+
+  "status.total": "全部:",
+  "status.success": "完成:",
+  "status.error": "错误:",
+  "status.convert": "开始转换",
+  "status.clear": "清除列表",
+  "status.retry": "重试失败",
+
+  "settings.title": "设置",
+  "settings.tab.convert": "转换",
+  "settings.tab.replace": "替换",
+  "settings.tab.modules": "模块",
+  "settings.tab.general": "常规",
+
+  "settings.converter.title": "转换模式",
+  "converter.group.traditional": "繁简",
+  "converter.group.localize": "本地化",
+  "converter.group.other": "其他",
+  "converter.group.thirdParty": "第三方服务",
+  "converter.Traditional": "繁体化",
+  "converter.Simplified": "简体化",
+  "converter.China": "中国化",
+  "converter.Hongkong": "香港化",
+  "converter.Taiwan": "台湾化",
+  "converter.Bopomofo": "注音化",
+  "converter.Mars": "火星化",
+  "converter.Pinyin": "拼音化",
+  "converter.WikiSimplified": "维基简体化",
+  "converter.WikiTraditional": "维基繁体化",
+
+  "settings.save.title": "保存选项",
+  "settings.save.folderLabel": "保存文件夹",
+  "settings.save.same": "输入文件所在文件夹",
+  "settings.save.custom": "自定义文件夹…",
+  "settings.save.namingLabel": "命名方式",
+  "settings.save.naming.auto": "自动命名",
+  "settings.save.naming.suffix": "自定义后缀",
+  "settings.save.naming.overwrite": "覆盖原文件",
+  "settings.save.suffixLabel": "后缀名称",
+
+  "settings.replace.title": "自定义替换",
+  "settings.replace.preLabel": "转换前替换",
+  "settings.replace.postLabel": "转换后替换",
+  "settings.replace.protectLabel": "保护词汇（不转换）",
+  "settings.replace.pairPlaceholder": "搜索=替换（每行一组）",
+  "settings.replace.protectPlaceholder": "每行一个词汇",
+
+  "settings.modules.title": "词语模块",
+  "module.auto": "自动",
+  "module.enable": "启用",
+  "module.disable": "停用",
+
+  "settings.language.title": "语言",
+
+  "settings.appearance.title": "外观",
+  "theme.system": "系统",
+  "theme.light": "浅色",
+  "theme.dark": "深色",
+
+  "settings.update.title": "更新",
+  "settings.update.check": "检查更新",
+
+  "settings.behavior.title": "行为",
+  "settings.behavior.autoConvert": "拖入文件后自动开始转换",
+
+  "settings.about.title": "关于",
+  "settings.about.version": "版本",
+  "settings.about.license": "授权条款",
+  "settings.about.apiNotice": "本程序使用了繁化姬的 API 服务。商业使用请参阅繁化姬授权条款。",
+
+  "file.convertDone": "转换完成",
+  "file.convertDoneWithWarnings": "转换完成（{warnings}）",
+  "file.converting": "转换中…",
+  "file.convertingChapter": "转换中… ({current}/{total} {name})",
+
+  "dom.missingElement": "必要元素不存在：{selector}",
+
+  "update.checking": "正在检查…",
+  "update.upToDate": "当前已是最新版本。",
+  "update.found": "发现新版本 {version}",
+  "update.confirm": "发现新版本 {version}，是否要下载并安装？",
+  "update.downloading": "正在下载更新…",
+  "update.restarting": "下载完成，即将重新启动…",
+  "update.failed": "检查更新失败：{error}",
+
+  "status.pending": "待转换",
+  "status.converting": "转换中…",
+  "status.done": "完成",
+  "status.errorLabel": "错误"
+}

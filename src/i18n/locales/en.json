@@ -1,0 +1,99 @@
+{
+  "app.title": "Fanhuaji",
+  "header.settings": "Settings",
+
+  "drop.title": "Drop files here",
+  "drop.subtitle": "or click to open files",
+  "drop.formats": "Supports TXT, SRT, ASS, LRC, VTT, CSV, JSON, XML, HTML, MD, EPUB",
+
+  "files.addMore": "Add more files",
+
+  "status.total": "Total:",
+  "status.success": "Done:",
+  "status.error": "Error:",
+  "status.convert": "Convert",
+  "status.clear": "Clear list",
+  "status.retry": "Retry failed",
+
+  "settings.title": "Settings",
+  "settings.tab.convert": "Convert",
+  "settings.tab.replace": "Replace",
+  "settings.tab.modules": "Modules",
+  "settings.tab.general": "General",
+
+  "settings.converter.title": "Converter",
+  "converter.group.traditional": "Traditional / Simplified",
+  "converter.group.localize": "Localization",
+  "converter.group.other": "Other",
+  "converter.group.thirdParty": "Third-party",
+  "converter.Traditional": "To Traditional",
+  "converter.Simplified": "To Simplified",
+  "converter.China": "To China Standard",
+  "converter.Hongkong": "To Hong Kong Standard",
+  "converter.Taiwan": "To Taiwan Standard",
+  "converter.Bopomofo": "To Bopomofo",
+  "converter.Mars": "To Mars Script",
+  "converter.Pinyin": "To Pinyin",
+  "converter.WikiSimplified": "Wiki Simplified",
+  "converter.WikiTraditional": "Wiki Traditional",
+
+  "settings.save.title": "Save Options",
+  "settings.save.folderLabel": "Save folder",
+  "settings.save.same": "Same as input file",
+  "settings.save.custom": "Custom folder\u2026",
+  "settings.save.namingLabel": "Naming",
+  "settings.save.naming.auto": "Auto rename",
+  "settings.save.naming.suffix": "Custom suffix",
+  "settings.save.naming.overwrite": "Overwrite original",
+  "settings.save.suffixLabel": "Suffix",
+
+  "settings.replace.title": "Custom Replacements",
+  "settings.replace.preLabel": "Pre-convert replacements",
+  "settings.replace.postLabel": "Post-convert replacements",
+  "settings.replace.protectLabel": "Protected words (no conversion)",
+  "settings.replace.pairPlaceholder": "search=replace (one per line)",
+  "settings.replace.protectPlaceholder": "One word per line",
+
+  "settings.modules.title": "Word Modules",
+  "module.auto": "Auto",
+  "module.enable": "Enable",
+  "module.disable": "Disable",
+
+  "settings.language.title": "Language",
+
+  "settings.appearance.title": "Appearance",
+  "theme.system": "System",
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+
+  "settings.update.title": "Update",
+  "settings.update.check": "Check for updates",
+
+  "settings.behavior.title": "Behavior",
+  "settings.behavior.autoConvert": "Auto-convert after dropping files",
+
+  "settings.about.title": "About",
+  "settings.about.version": "Version",
+  "settings.about.license": "License",
+  "settings.about.apiNotice": "This app uses the Fanhuaji API. For commercial use, please refer to the Fanhuaji license.",
+
+  "file.convertDone": "Done",
+  "file.convertDoneWithWarnings": "Done ({warnings})",
+  "file.converting": "Converting\u2026",
+  "file.convertingChapter": "Converting\u2026 ({current}/{total} {name})",
+
+  "dom.missingElement": "Required element not found: {selector}",
+
+  "update.checking": "Checking\u2026",
+  "update.upToDate": "You are up to date.",
+  "update.found": "New version {version} available",
+  "update.confirm": "New version {version} is available. Download and install?",
+  "update.downloading": "Downloading update\u2026",
+  "update.restarting": "Download complete, restarting\u2026",
+  "update.failed": "Update check failed: {error}",
+
+  "status.pending": "Pending",
+  "status.converting": "Converting\u2026",
+  "status.done": "Done",
+  "status.errorLabel": "Error"
+}

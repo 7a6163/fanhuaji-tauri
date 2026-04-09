@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { getLocale, initI18n, type Locale, setLocale, t } from "./i18n/i18n";
 import { initTheme } from "./theme";
 import { initUpdater } from "./updater";
 import {
@@ -65,9 +66,12 @@ let activeCategory = "";
 
 // --- DOM ---
 
+// Init i18n early so t() is available for error messages
+initI18n();
+
 const $ = <T extends HTMLElement>(sel: string): T => {
   const el = document.querySelector<T>(sel);
-  if (!el) throw new Error(`必要元素不存在：${sel}`);
+  if (!el) throw new Error(t("dom.missingElement", { selector: sel }));
   return el;
 };
 
@@ -142,7 +146,7 @@ function render() {
     <div class="file-item" data-id="${escHtml(f.id)}">
       ${statusIcon(f.status)}
       <span class="file-name" title="${escHtml(`${f.inputPath}/${f.inputName}`)}">${escHtml(f.inputName)}</span>
-      <span class="file-message">${f.status === "success" ? "轉換完成" : f.status === "converting" ? (f.chapterTotal ? `轉換中… (${escHtml(String(f.chapterIndex))}/${escHtml(String(f.chapterTotal))} ${escHtml(f.chapterName ?? "")})` : "轉換中…") : escHtml(f.message)}</span>
+      <span class="file-message">${f.status === "success" ? escHtml(t("file.convertDone")) : f.status === "converting" ? (f.chapterTotal ? escHtml(t("file.convertingChapter", { current: String(f.chapterIndex), total: String(f.chapterTotal), name: f.chapterName ?? "" })) : escHtml(t("file.converting"))) : escHtml(f.message)}</span>
     </div>`,
     )
     .join("");
@@ -259,7 +263,9 @@ async function convertPending() {
             ? {
                 ...f,
                 status: "success" as const,
-                message: result.warnings ? `轉換完成（${result.warnings}）` : "轉換完成",
+                message: result.warnings
+                  ? t("file.convertDoneWithWarnings", { warnings: result.warnings })
+                  : t("file.convertDone"),
                 outputName: result.outputName,
                 outputPath: result.outputPath,
               }
@@ -454,9 +460,9 @@ function renderModuleList() {
       (m) => `
     <div class="module-item">
       <select data-module="${escHtml(m.name)}">
-        <option value="auto"${(moduleSettings[m.name] ?? "auto") === "auto" ? " selected" : ""}>自動</option>
-        <option value="enable"${moduleSettings[m.name] === "enable" ? " selected" : ""}>啟用</option>
-        <option value="disable"${moduleSettings[m.name] === "disable" ? " selected" : ""}>停用</option>
+        <option value="auto"${(moduleSettings[m.name] ?? "auto") === "auto" ? " selected" : ""}>${escHtml(t("module.auto"))}</option>
+        <option value="enable"${moduleSettings[m.name] === "enable" ? " selected" : ""}>${escHtml(t("module.enable"))}</option>
+        <option value="disable"${moduleSettings[m.name] === "disable" ? " selected" : ""}>${escHtml(t("module.disable"))}</option>
       </select>
       <span class="module-name">${escHtml(m.name)}</span>
       <span class="module-desc">${escHtml(m.description)}</span>
@@ -535,7 +541,7 @@ async function initVersion() {
     const version = await getVersion();
     const el = document.getElementById("app-version");
     if (el) el.textContent = version;
-    document.title = `繁化姬 ${version}`;
+    document.title = `${t("app.title")} ${version}`;
   } catch {
     // Version unavailable — title stays as default
   }
@@ -546,6 +552,19 @@ void initVersion();
 initUpdater();
 void loadServiceInfo();
 render();
+
+// --- Language selector ---
+
+const localeSelect = document.getElementById("locale-select") as HTMLSelectElement | null;
+if (localeSelect) {
+  localeSelect.value = getLocale();
+  localeSelect.addEventListener("change", () => {
+    setLocale(localeSelect.value as Locale);
+    render();
+    renderModuleList();
+    void initVersion();
+  });
+}
 
 // Listen for EPUB chapter progress
 void listen<EpubProgressPayload>("epub-progress", (event) => {
