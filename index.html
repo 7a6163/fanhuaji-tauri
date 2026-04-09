@@ -15,10 +15,6 @@
         </button>
       </header>
 
-      <div class="api-notice">
-        本程式使用了<a class="link" data-href="https://zhconvert.org">繁化姬</a>的 API 服務。<a class="link" data-href="https://docs.zhconvert.org/license/">商業使用請參閱繁化姬授權條款</a>。
-      </div>
-
       <!-- Main content -->
       <main class="main">
         <!-- Empty state: drop zone -->
@@ -49,6 +45,7 @@
         <span class="status-badge green">完成: <span id="count-success">0</span></span>
         <span class="status-badge red">錯誤: <span id="count-error">0</span></span>
         <span class="status-spacer"></span>
+        <button type="button" id="btn-convert" class="status-action accent hidden">開始轉換</button>
         <button type="button" id="btn-clear" class="status-action">清除列表</button>
         <button type="button" id="btn-retry" class="status-action hidden">重試失敗</button>
       </footer>
@@ -156,12 +153,22 @@
               <span id="update-status" class="update-status"></span>
             </section>
             <section class="setting-section">
+              <h3><i class="ti ti-robot"></i> 行為</h3>
+              <label class="setting-toggle">
+                <input type="checkbox" id="auto-convert" checked />
+                <span>拖入檔案後自動開始轉換</span>
+              </label>
+            </section>
+            <section class="setting-section">
               <h3><i class="ti ti-info-circle"></i> 關於</h3>
               <div class="about-info">
                 <span>版本 <span id="app-version"></span></span>
                 <a class="link" data-href="https://zhconvert.org">zhconvert.org</a>
                 <a class="link" data-href="https://docs.zhconvert.org/license/">授權條款</a>
                 <a class="link" data-href="https://github.com/7a6163/fanhuaji-tauri">GitHub</a>
+              </div>
+              <div class="api-notice">
+                本程式使用了<a class="link" data-href="https://zhconvert.org">繁化姬</a>的 API 服務。<a class="link" data-href="https://docs.zhconvert.org/license/">商業使用請參閱繁化姬授權條款</a>。
               </div>
             </section>
           </div>

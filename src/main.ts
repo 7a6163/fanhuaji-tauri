@@ -40,12 +40,26 @@ interface ModuleInfo {
   category: string;
 }
 
+// --- Storage keys ---
+
+const STORAGE_KEYS = {
+  converter: "fanhuaji-converter",
+  naming: "fanhuaji-naming",
+  preReplace: "fanhuaji-pre-replace",
+  postReplace: "fanhuaji-post-replace",
+  protectReplace: "fanhuaji-protect-replace",
+  modules: "fanhuaji-modules",
+  autoConvert: "fanhuaji-auto-convert",
+} as const;
+
 // --- State ---
 
 let files: FileEntry[] = [];
 let isConverting = false;
 let moduleData: ModuleInfo[] = [];
-let moduleSettings: Record<string, string> = {};
+let moduleSettings: Record<string, string> = JSON.parse(
+  localStorage.getItem(STORAGE_KEYS.modules) ?? "{}",
+);
 let activeCategory = "";
 
 // --- DOM ---
@@ -66,6 +80,21 @@ const countTotal = $<HTMLSpanElement>("#count-total");
 const countSuccess = $<HTMLSpanElement>("#count-success");
 const countError = $<HTMLSpanElement>("#count-error");
 const retryBtn = $<HTMLButtonElement>("#btn-retry");
+const convertBtn = $<HTMLButtonElement>("#btn-convert");
+const autoConvertCheckbox = $<HTMLInputElement>("#auto-convert");
+
+// --- Auto-convert ---
+
+function isAutoConvert(): boolean {
+  return localStorage.getItem(STORAGE_KEYS.autoConvert) !== "false";
+}
+
+// Restore auto-convert setting
+autoConvertCheckbox.checked = isAutoConvert();
+autoConvertCheckbox.addEventListener("change", () => {
+  localStorage.setItem(STORAGE_KEYS.autoConvert, String(autoConvertCheckbox.checked));
+  render();
+});
 
 // --- Helpers ---
 
@@ -94,6 +123,10 @@ function render() {
   // Show retry button if there are errors
   const hasErrors = files.some((f) => f.status === "error");
   retryBtn.classList.toggle("hidden", !hasErrors);
+
+  // Show convert button when auto-convert is off and there are pending files
+  const hasPending = files.some((f) => f.status === "pending");
+  convertBtn.classList.toggle("hidden", isAutoConvert() || !hasPending || isConverting);
 
   // Counts
   const counts = countByStatus(files);
@@ -151,7 +184,9 @@ function addFiles(paths: string[]) {
   });
   files = [...files, ...newFiles];
   render();
-  void convertPending();
+  if (isAutoConvert()) {
+    void convertPending();
+  }
 }
 
 async function openFiles() {
@@ -259,6 +294,39 @@ function closeSettings() {
 $<HTMLButtonElement>("#btn-settings").addEventListener("click", openSettings);
 $<HTMLButtonElement>("#btn-close-settings").addEventListener("click", closeSettings);
 $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings);
+
+// --- Restore persisted settings ---
+
+function restoreSetting(id: string, key: string) {
+  const el = document.getElementById(id) as HTMLSelectElement | HTMLTextAreaElement | null;
+  const saved = localStorage.getItem(key);
+  if (el && saved) el.value = saved;
+}
+
+function persistOnChange(id: string, key: string) {
+  const el = document.getElementById(id) as HTMLSelectElement | HTMLTextAreaElement | null;
+  el?.addEventListener("change", () => {
+    localStorage.setItem(key, el.value);
+  });
+  // For textareas, also persist on input (debounced would be better but change is fine)
+  if (el instanceof HTMLTextAreaElement) {
+    el.addEventListener("input", () => {
+      localStorage.setItem(key, el.value);
+    });
+  }
+}
+
+restoreSetting("converter", STORAGE_KEYS.converter);
+restoreSetting("naming", STORAGE_KEYS.naming);
+restoreSetting("pre-replace", STORAGE_KEYS.preReplace);
+restoreSetting("post-replace", STORAGE_KEYS.postReplace);
+restoreSetting("protect-replace", STORAGE_KEYS.protectReplace);
+
+persistOnChange("converter", STORAGE_KEYS.converter);
+persistOnChange("naming", STORAGE_KEYS.naming);
+persistOnChange("pre-replace", STORAGE_KEYS.preReplace);
+persistOnChange("post-replace", STORAGE_KEYS.postReplace);
+persistOnChange("protect-replace", STORAGE_KEYS.protectReplace);
 
 // Custom save folder picker
 const SAVE_FOLDER_KEY = "fanhuaji-save-folder";
@@ -375,6 +443,7 @@ function renderModuleList() {
     sel.addEventListener("change", () => {
       const name = sel.dataset.module ?? "";
       moduleSettings = { ...moduleSettings, [name]: sel.value };
+      localStorage.setItem(STORAGE_KEYS.modules, JSON.stringify(moduleSettings));
     });
   });
 }
@@ -394,6 +463,10 @@ $<HTMLButtonElement>("#btn-add-more").addEventListener("click", openFiles);
 $<HTMLButtonElement>("#btn-clear").addEventListener("click", () => {
   files = [];
   render();
+});
+
+convertBtn.addEventListener("click", () => {
+  void convertPending();
 });
 
 retryBtn.addEventListener("click", () => {

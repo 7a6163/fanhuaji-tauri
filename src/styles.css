@@ -107,9 +107,10 @@ body {
 }
 
 .api-notice {
-  padding: 0 16px 4px;
   font-size: 11px;
   color: var(--text-muted);
+  margin-top: 8px;
+  line-height: 1.5;
 }
 
 .icon-btn:hover {
@@ -329,6 +330,15 @@ body {
   background: var(--hover);
 }
 
+.status-action.accent {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.status-action.accent:hover {
+  background: rgba(52, 120, 246, 0.1);
+}
+
 /* Settings drawer */
 .settings-backdrop {
   position: fixed;
@@ -439,6 +449,21 @@ body {
 
 .setting-label:first-of-type {
   margin-top: 0;
+}
+
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.setting-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* Cross-platform select */
