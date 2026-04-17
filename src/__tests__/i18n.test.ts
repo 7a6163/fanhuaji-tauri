@@ -153,6 +153,14 @@ describe("initI18n", () => {
     expect(getLocale()).toBe("zh-TW");
   });
 
+  it("falls back to zh-TW for other zh variants (e.g. zh-HK)", () => {
+    // zh-HK uses traditional script; safer to default to zh-TW than zh-CN.
+    localStorage.clear();
+    Object.defineProperty(navigator, "language", { value: "zh-HK", configurable: true });
+    initI18n();
+    expect(getLocale()).toBe("zh-TW");
+  });
+
   it("detects en for navigator language en-US", () => {
     localStorage.clear();
     Object.defineProperty(navigator, "language", { value: "en-US", configurable: true });
