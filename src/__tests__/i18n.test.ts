@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getLocale, initI18n, setLocale, t, translatePage } from "../i18n/i18n";
+import { getLocale, initI18n, setLocale, t, translateError, translatePage } from "../i18n/i18n";
 
 beforeEach(() => {
   localStorage.clear();
@@ -247,6 +247,63 @@ describe("translatePage", () => {
     translatePage();
     // Empty key returns empty string
     expect(document.querySelector("span")?.textContent).toBe("");
+  });
+});
+
+// --- translateError ---
+
+describe("translateError", () => {
+  it("translates a known error code with detail", () => {
+    setLocale("zh-TW");
+    expect(translateError("EPUB_ENTRY_TOO_LARGE:chapter1.xhtml")).toBe(
+      "EPUB 包含過大的檔案：chapter1.xhtml",
+    );
+  });
+
+  it("translates a known error code without detail", () => {
+    setLocale("zh-TW");
+    expect(translateError("FILE_TOO_LARGE")).toBe("檔案過大（上限 50 MB）");
+  });
+
+  it("translates in English when locale is en", () => {
+    setLocale("en");
+    expect(translateError("FILE_TOO_LARGE")).toBe("File too large (limit 50 MB)");
+  });
+
+  it("translates with detail interpolation in en", () => {
+    setLocale("en");
+    expect(translateError("API_ERROR:timeout")).toBe("API error: timeout");
+  });
+
+  it("falls back to raw string for unknown code", () => {
+    expect(translateError("TOTALLY_UNKNOWN_CODE:detail")).toBe("TOTALLY_UNKNOWN_CODE:detail");
+  });
+
+  it("falls back to raw string for non-code input", () => {
+    expect(translateError("some plain error message")).toBe("some plain error message");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(translateError("")).toBe("");
+  });
+
+  it("handles detail containing colons", () => {
+    setLocale("en");
+    expect(translateError("NET_REQUEST_FAILED:connection to api.example.com:443 refused")).toBe(
+      "Network request failed: connection to api.example.com:443 refused",
+    );
+  });
+
+  it("handles detail containing dollar signs safely", () => {
+    // String.prototype.replace with a string replacement treats $1, $$ as special;
+    // translateError must use a replacer function to avoid that substitution.
+    setLocale("en");
+    expect(translateError("API_ERROR:$100 credit failed")).toBe("API error: $100 credit failed");
+  });
+
+  it("parses EPUB_PARTIAL_FAILED with count detail", () => {
+    setLocale("zh-TW");
+    expect(translateError("EPUB_PARTIAL_FAILED:3/10")).toBe("部分章節失敗（3/10）");
   });
 });
 
