@@ -2,6 +2,19 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.3.0] - 2026-04-17
+
+### Added
+
+- Rust 後端錯誤訊息本地化：錯誤以「代碼:詳情」格式（如 `EPUB_ENTRY_TOO_LARGE:chapter1.xhtml`）傳回前端，由新的 `translateError()` helper 轉為當前語言
+- 新增 36 個 `errors.*` 翻譯 key（正體/簡體/English）
+- 新增 zh-HK 等繁體中文變體的 locale 偵測測試
+
+### Changed
+
+- EPUB 章節轉換失敗摘要簡化為計數格式（`部分章節失敗（3/10）`）
+- `convert_epub` 內部移除每章節錯誤詳情字串收集，改為單一計數器
+
 ## [2.2.1] - 2026-04-17
 
 ### Security

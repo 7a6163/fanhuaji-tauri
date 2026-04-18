@@ -79,3 +79,20 @@ export function initI18n(): void {
   document.documentElement.lang = currentLocale === "zh-TW" ? "zh-Hant" : currentLocale;
   translatePage();
 }
+
+const ERROR_CODE_PATTERN = /^([A-Z][A-Z0-9_]*)(?::([\s\S]*))?$/;
+
+/**
+ * Translate a Rust-originated error string of the form "CODE" or "CODE:detail"
+ * into the current locale. The CODE must match `errors.<CODE>` in the locale
+ * JSON. Falls back to the raw string if the prefix is not a recognised code.
+ */
+export function translateError(raw: string): string {
+  if (!raw) return raw;
+  const match = raw.match(ERROR_CODE_PATTERN);
+  if (!match) return raw;
+  const [, code, detail] = match;
+  const key = `errors.${code}`;
+  const translated = t(key, { detail: detail ?? "" });
+  return translated === key ? raw : translated;
+}

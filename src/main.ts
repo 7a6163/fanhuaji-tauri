@@ -10,7 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { getLocale, initI18n, type Locale, setLocale, t } from "./i18n/i18n";
+import { getLocale, initI18n, type Locale, setLocale, t, translateError } from "./i18n/i18n";
 import { initTheme } from "./theme";
 import { initUpdater } from "./updater";
 import {
@@ -264,7 +264,9 @@ async function convertPending() {
                 ...f,
                 status: "success" as const,
                 message: result.warnings
-                  ? t("file.convertDoneWithWarnings", { warnings: result.warnings })
+                  ? t("file.convertDoneWithWarnings", {
+                      warnings: translateError(result.warnings),
+                    })
                   : t("file.convertDone"),
                 outputName: result.outputName,
                 outputPath: result.outputPath,
@@ -273,7 +275,9 @@ async function convertPending() {
         );
       } catch (err) {
         files = files.map((f) =>
-          f.id === file.id ? { ...f, status: "error" as const, message: String(err) } : f,
+          f.id === file.id
+            ? { ...f, status: "error" as const, message: translateError(String(err)) }
+            : f,
         );
       }
 

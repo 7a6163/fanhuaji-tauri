@@ -28,10 +28,10 @@ const MAX_TOTAL_BYTES: u64 = 500 * 1024 * 1024;
 
 /// Extract an EPUB ZIP to a temp directory and return content file paths.
 pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), String> {
-    let file = fs::File::open(epub_path).map_err(|e| format!("無法開啟 EPUB：{e}"))?;
-    let mut archive = ZipArchive::new(file).map_err(|e| format!("無效的 EPUB 檔案：{e}"))?;
+    let file = fs::File::open(epub_path).map_err(|e| format!("EPUB_OPEN_FAILED:{e}"))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| format!("EPUB_INVALID:{e}"))?;
 
-    let temp_dir = TempDir::new().map_err(|e| format!("無法建立暫存目錄：{e}"))?;
+    let temp_dir = TempDir::new().map_err(|e| format!("TEMPDIR_FAILED:{e}"))?;
 
     let mut total_extracted: u64 = 0;
 
@@ -39,12 +39,12 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
-            .map_err(|e| format!("無法讀取 EPUB 內容：{e}"))?;
+            .map_err(|e| format!("EPUB_READ_ENTRY_FAILED:{e}"))?;
         let name = entry.name().to_string();
 
         if entry.is_dir() {
             fs::create_dir_all(temp_dir.path().join(&name))
-                .map_err(|e| format!("無法建立目錄：{e}"))?;
+                .map_err(|e| format!("DIR_CREATE_FAILED:{e}"))?;
             continue;
         }
 
@@ -52,7 +52,7 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
         // without spending CPU on decompression. The header is untrusted, so
         // we also enforce the limit during the actual read below.
         if entry.size() > MAX_ENTRY_BYTES {
-            return Err(format!("EPUB 包含過大的檔案：{name}"));
+            return Err(format!("EPUB_ENTRY_TOO_LARGE:{name}"));
         }
 
         // Prevent ZIP path traversal. Path::starts_with is component-based
@@ -65,7 +65,7 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
                 .components()
                 .any(|c| matches!(c, Component::ParentDir | Component::RootDir))
         {
-            return Err(format!("EPUB 包含不安全的路徑：{name}"));
+            return Err(format!("EPUB_UNSAFE_PATH:{name}"));
         }
 
         let out_path = temp_dir.path().join(rel);
@@ -73,11 +73,11 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
         // Defence in depth: verify the joined path still sits under the
         // tempdir root (covers edge cases like Windows drive prefixes).
         if !out_path.starts_with(temp_dir.path()) {
-            return Err(format!("EPUB 包含不安全的路徑：{name}"));
+            return Err(format!("EPUB_UNSAFE_PATH:{name}"));
         }
 
         if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("無法建立目錄：{e}"))?;
+            fs::create_dir_all(parent).map_err(|e| format!("DIR_CREATE_FAILED:{e}"))?;
         }
 
         // Cap the decompressed read to MAX_ENTRY_BYTES + 1 so we can detect
@@ -87,17 +87,17 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
         (&mut entry)
             .take(limit)
             .read_to_end(&mut buf)
-            .map_err(|e| format!("無法讀取檔案：{e}"))?;
+            .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
         if buf.len() as u64 > MAX_ENTRY_BYTES {
-            return Err(format!("EPUB 包含過大的檔案：{name}"));
+            return Err(format!("EPUB_ENTRY_TOO_LARGE:{name}"));
         }
 
         total_extracted = total_extracted.saturating_add(buf.len() as u64);
         if total_extracted > MAX_TOTAL_BYTES {
-            return Err("EPUB 解壓縮後過大".to_string());
+            return Err("EPUB_TOTAL_TOO_LARGE".to_string());
         }
 
-        fs::write(&out_path, &buf).map_err(|e| format!("無法寫入檔案：{e}"))?;
+        fs::write(&out_path, &buf).map_err(|e| format!("FILE_WRITE_FAILED:{e}"))?;
     }
 
     // Find content files by scanning for .xhtml/.html files
@@ -119,9 +119,9 @@ fn find_content_files_recursive(
     dir: &Path,
     files: &mut Vec<ContentFile>,
 ) -> Result<(), String> {
-    let entries = fs::read_dir(dir).map_err(|e| format!("無法讀取目錄：{e}"))?;
+    let entries = fs::read_dir(dir).map_err(|e| format!("DIR_READ_FAILED:{e}"))?;
     for entry in entries {
-        let entry = entry.map_err(|e| format!("無法讀取目錄項目：{e}"))?;
+        let entry = entry.map_err(|e| format!("DIR_ENTRY_READ_FAILED:{e}"))?;
         let path = entry.path();
         if path.is_dir() {
             find_content_files_recursive(root, &path, files)?;
@@ -130,7 +130,7 @@ fn find_content_files_recursive(
             if ext_lower == "xhtml" || ext_lower == "html" || ext_lower == "htm" {
                 let relative = path
                     .strip_prefix(root)
-                    .map_err(|e| format!("路徑錯誤：{e}"))?
+                    .map_err(|e| format!("PATH_STRIP_FAILED:{e}"))?
                     .to_string_lossy()
                     .into_owned();
                 files.push(ContentFile {
@@ -153,14 +153,14 @@ pub fn extract_text(xhtml: &str) -> Result<(String, usize), String> {
             Ok(Event::Text(e)) => {
                 let text = e
                     .unescape()
-                    .map_err(|err| format!("XML 解碼錯誤：{err}"))?
+                    .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?
                     .into_owned();
                 if !text.trim().is_empty() {
                     texts.push(text);
                 }
             }
             Ok(Event::Eof) => break,
-            Err(e) => return Err(format!("XML 解析錯誤：{e}")),
+            Err(e) => return Err(format!("XML_PARSE_FAILED:{e}")),
             _ => {}
         }
     }
@@ -180,49 +180,51 @@ pub fn replace_text(xhtml: &str, converted: &str) -> Result<String, String> {
     loop {
         match reader.read_event() {
             Ok(Event::Text(e)) => {
-                let original = e.unescape().map_err(|err| format!("XML 解碼錯誤：{err}"))?;
+                let original = e
+                    .unescape()
+                    .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?;
                 if !original.trim().is_empty() && seg_idx < segments.len() {
                     let new_text = BytesText::new(segments[seg_idx]);
                     writer
                         .write_event(Event::Text(new_text))
-                        .map_err(|e| format!("XML 寫入錯誤：{e}"))?;
+                        .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
                     seg_idx += 1;
                 } else {
                     writer
                         .write_event(Event::Text(e.into_owned()))
-                        .map_err(|e| format!("XML 寫入錯誤：{e}"))?;
+                        .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
                 }
             }
             Ok(Event::Eof) => break,
             Ok(e) => {
                 writer
                     .write_event(e)
-                    .map_err(|e| format!("XML 寫入錯誤：{e}"))?;
+                    .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
             }
-            Err(e) => return Err(format!("XML 解析錯誤：{e}")),
+            Err(e) => return Err(format!("XML_PARSE_FAILED:{e}")),
         }
     }
 
     let buf = writer.into_inner().into_inner();
-    String::from_utf8(buf).map_err(|e| format!("UTF-8 編碼錯誤：{e}"))
+    String::from_utf8(buf).map_err(|e| format!("UTF8_ENCODE_FAILED:{e}"))
 }
 
 /// Repack extracted files into a valid EPUB ZIP.
 /// The mimetype file must be first and uncompressed per EPUB spec.
 pub fn repack_epub(temp_dir: &Path, output_path: &Path) -> Result<(), String> {
-    let file = fs::File::create(output_path).map_err(|e| format!("無法建立輸出檔案：{e}"))?;
+    let file = fs::File::create(output_path).map_err(|e| format!("OUTPUT_CREATE_FAILED:{e}"))?;
     let mut zip = ZipWriter::new(file);
 
     // Write mimetype first (uncompressed, no extra field)
     let mimetype_path = temp_dir.join("mimetype");
     if mimetype_path.exists() {
         let content =
-            fs::read_to_string(&mimetype_path).map_err(|e| format!("無法讀取 mimetype：{e}"))?;
+            fs::read_to_string(&mimetype_path).map_err(|e| format!("MIMETYPE_READ_FAILED:{e}"))?;
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
         zip.start_file("mimetype", options)
-            .map_err(|e| format!("ZIP 寫入錯誤：{e}"))?;
+            .map_err(|e| format!("ZIP_WRITE_FAILED:{e}"))?;
         zip.write_all(content.as_bytes())
-            .map_err(|e| format!("ZIP 寫入錯誤：{e}"))?;
+            .map_err(|e| format!("ZIP_WRITE_FAILED:{e}"))?;
     }
 
     // Add all other files
@@ -234,14 +236,15 @@ pub fn repack_epub(temp_dir: &Path, output_path: &Path) -> Result<(), String> {
             continue;
         }
         let full_path = temp_dir.join(relative);
-        let content = fs::read(&full_path).map_err(|e| format!("無法讀取 {relative}：{e}"))?;
+        let content =
+            fs::read(&full_path).map_err(|e| format!("FILE_READ_FAILED:{relative}: {e}"))?;
         zip.start_file(relative, options)
-            .map_err(|e| format!("ZIP 寫入錯誤：{e}"))?;
+            .map_err(|e| format!("ZIP_WRITE_FAILED:{e}"))?;
         zip.write_all(&content)
-            .map_err(|e| format!("ZIP 寫入錯誤：{e}"))?;
+            .map_err(|e| format!("ZIP_WRITE_FAILED:{e}"))?;
     }
 
-    zip.finish().map_err(|e| format!("ZIP 完成錯誤：{e}"))?;
+    zip.finish().map_err(|e| format!("ZIP_FINISH_FAILED:{e}"))?;
     Ok(())
 }
 
@@ -252,16 +255,16 @@ fn collect_files(dir: &Path) -> Result<Vec<String>, String> {
 }
 
 fn collect_files_recursive(root: &Path, dir: &Path, files: &mut Vec<String>) -> Result<(), String> {
-    let entries = fs::read_dir(dir).map_err(|e| format!("無法讀取目錄：{e}"))?;
+    let entries = fs::read_dir(dir).map_err(|e| format!("DIR_READ_FAILED:{e}"))?;
     for entry in entries {
-        let entry = entry.map_err(|e| format!("無法讀取目錄項目：{e}"))?;
+        let entry = entry.map_err(|e| format!("DIR_ENTRY_READ_FAILED:{e}"))?;
         let path = entry.path();
         if path.is_dir() {
             collect_files_recursive(root, &path, files)?;
         } else {
             let relative = path
                 .strip_prefix(root)
-                .map_err(|e| format!("路徑錯誤：{e}"))?
+                .map_err(|e| format!("PATH_STRIP_FAILED:{e}"))?
                 .to_string_lossy()
                 .replace('\\', "/");
             files.push(relative);
@@ -420,6 +423,31 @@ mod tests {
         let (text, count) = extract_text(xhtml).unwrap();
         assert_eq!(count, 1);
         assert_eq!(text, "唯一文字");
+    }
+
+    #[test]
+    fn extract_text_malformed_xml_returns_parse_error() {
+        // Unclosed attribute quote forces quick-xml to emit an Err event.
+        let xhtml = r#"<html><body><p attr="unclosed><</p></body></html>"#;
+        let result = extract_text(xhtml);
+        assert!(result.is_err(), "malformed XML must produce an error");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.starts_with("XML_PARSE_FAILED:") || msg.starts_with("XML_DECODE_FAILED:"),
+            "expected XML parse/decode error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn replace_text_malformed_xml_returns_parse_error() {
+        let xhtml = r#"<html><body><p attr="unclosed><</p></body></html>"#;
+        let result = replace_text(xhtml, "replacement");
+        assert!(result.is_err(), "malformed XML must produce an error");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.starts_with("XML_PARSE_FAILED:") || msg.starts_with("XML_DECODE_FAILED:"),
+            "expected XML parse/decode error, got: {msg}"
+        );
     }
 
     #[test]
@@ -645,7 +673,7 @@ mod tests {
         assert!(result.is_err());
         let msg = result.unwrap_err();
         assert!(
-            msg.contains("無效的 EPUB") || msg.contains("EPUB"),
+            msg.starts_with("EPUB_INVALID:") || msg.starts_with("EPUB_"),
             "unexpected error message: {msg}"
         );
     }
@@ -655,7 +683,7 @@ mod tests {
         let result = extract_epub(Path::new("/nonexistent/path/book.epub"));
         assert!(result.is_err());
         let msg = result.unwrap_err();
-        assert!(msg.contains("無法開啟 EPUB") || msg.contains("EPUB"));
+        assert!(msg.starts_with("EPUB_OPEN_FAILED:"));
     }
 
     #[test]
@@ -671,9 +699,39 @@ mod tests {
         assert!(result.is_err(), "oversized entry must be rejected");
         let msg = result.unwrap_err();
         assert!(
-            msg.contains("過大"),
+            msg.starts_with("EPUB_ENTRY_TOO_LARGE:"),
             "expected size-limit error, got: {msg}"
         );
+    }
+
+    #[test]
+    fn extract_epub_creates_directory_entries() {
+        // Build an EPUB that includes an explicit directory entry
+        // (trailing slash). extract_epub must call fs::create_dir_all
+        // for the is_dir() branch.
+        let buf = Vec::new();
+        let cursor = Cursor::new(buf);
+        let mut zip = ZipWriter::new(cursor);
+        let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/epub+zip").unwrap();
+
+        let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        zip.add_directory("OEBPS/Text/", deflated).unwrap();
+        zip.start_file("OEBPS/Text/chapter.xhtml", deflated)
+            .unwrap();
+        zip.write_all(b"<html><body><p>dir test</p></body></html>")
+            .unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let tmp = epub_tempfile(&bytes);
+        let (dir, _) = extract_epub(tmp.path()).expect("extract should succeed");
+
+        assert!(
+            dir.path().join("OEBPS/Text").is_dir(),
+            "directory entry must be created on disk"
+        );
+        assert!(dir.path().join("OEBPS/Text/chapter.xhtml").exists());
     }
 
     #[test]
@@ -698,8 +756,8 @@ mod tests {
         assert!(result.is_err(), "path traversal must be rejected");
         let msg = result.unwrap_err();
         assert!(
-            msg.contains("不安全的路徑"),
-            "expected unsafe-path error, got: {msg}"
+            msg.starts_with("EPUB_UNSAFE_PATH:"),
+            "expected EPUB_UNSAFE_PATH error, got: {msg}"
         );
     }
 
@@ -723,8 +781,8 @@ mod tests {
         assert!(result.is_err(), "absolute path must be rejected");
         let msg = result.unwrap_err();
         assert!(
-            msg.contains("不安全的路徑"),
-            "expected unsafe-path error, got: {msg}"
+            msg.starts_with("EPUB_UNSAFE_PATH:"),
+            "expected EPUB_UNSAFE_PATH error, got: {msg}"
         );
     }
 
@@ -748,7 +806,7 @@ mod tests {
         assert!(result.is_err(), "cumulative overflow must be rejected");
         let msg = result.unwrap_err();
         assert!(
-            msg.contains("過大"),
+            msg == "EPUB_TOTAL_TOO_LARGE" || msg.starts_with("EPUB_ENTRY_TOO_LARGE:"),
             "expected size-limit error, got: {msg}"
         );
     }

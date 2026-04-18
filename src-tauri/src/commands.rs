@@ -17,12 +17,12 @@ pub async fn get_service_info(client: tauri::State<'_, HttpClient>) -> Result<Se
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("網路請求失敗：{e}"))?;
+        .map_err(|e| format!("NET_REQUEST_FAILED:{e}"))?;
 
     let info = resp
         .json()
         .await
-        .map_err(|e| format!("回應解析失敗：{e}"))?;
+        .map_err(|e| format!("RESPONSE_PARSE_FAILED:{e}"))?;
 
     build_service_info(info)
 }
@@ -80,18 +80,18 @@ pub async fn convert_file(
     // Canonicalize and validate input path
     let canonical = tokio::fs::canonicalize(&input_path)
         .await
-        .map_err(|e| format!("無效路徑：{e}"))?;
+        .map_err(|e| format!("INVALID_PATH:{e}"))?;
 
     // Check file size
     let metadata = tokio::fs::metadata(&canonical)
         .await
-        .map_err(|e| format!("無法讀取檔案資訊：{e}"))?;
+        .map_err(|e| format!("FILE_METADATA_FAILED:{e}"))?;
     check_file_size(metadata.len())?;
 
     // Read the file
     let content = tokio::fs::read_to_string(&canonical)
         .await
-        .map_err(|e| format!("無法讀取檔案：{e}"))?;
+        .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
 
     // Build API params
     let params = build_api_params(
@@ -111,12 +111,12 @@ pub async fn convert_file(
         .form(&params)
         .send()
         .await
-        .map_err(|e| format!("網路請求失敗：{e}"))?;
+        .map_err(|e| format!("NET_REQUEST_FAILED:{e}"))?;
 
     let api: ApiResponse = resp
         .json()
         .await
-        .map_err(|e| format!("回應解析失敗：{e}"))?;
+        .map_err(|e| format!("RESPONSE_PARSE_FAILED:{e}"))?;
 
     let data = validate_api_response(api)?;
 
@@ -129,13 +129,13 @@ pub async fn convert_file(
     // Build output path from canonical directory to prevent traversal
     let canonical_dir = tokio::fs::canonicalize(&dir)
         .await
-        .map_err(|e| format!("輸出目錄無效：{e}"))?;
+        .map_err(|e| format!("OUTPUT_DIR_INVALID:{e}"))?;
     let output_path = canonical_dir.join(&output_name);
 
     // Write output
     tokio::fs::write(&output_path, &data.text)
         .await
-        .map_err(|e| format!("無法寫入檔案：{e}"))?;
+        .map_err(|e| format!("FILE_WRITE_FAILED:{e}"))?;
 
     Ok(ConvertFileResult {
         output_name,
@@ -165,11 +165,11 @@ pub async fn convert_epub(
 
     let canonical = tokio::fs::canonicalize(&input_path)
         .await
-        .map_err(|e| format!("無效路徑：{e}"))?;
+        .map_err(|e| format!("INVALID_PATH:{e}"))?;
 
     let metadata = tokio::fs::metadata(&canonical)
         .await
-        .map_err(|e| format!("無法讀取檔案資訊：{e}"))?;
+        .map_err(|e| format!("FILE_METADATA_FAILED:{e}"))?;
     check_file_size(metadata.len())?;
 
     // Extract EPUB
@@ -177,11 +177,11 @@ pub async fn convert_epub(
     let (temp_dir, content_files) =
         tokio::task::spawn_blocking(move || epub::extract_epub(&canonical_clone))
             .await
-            .map_err(|e| format!("解壓錯誤：{e}"))??;
+            .map_err(|e| format!("EPUB_EXTRACT_FAILED:{e}"))??;
 
     let chapter_total = content_files.len();
     let url = format!("{API_BASE}/convert");
-    let mut errors: Vec<String> = Vec::new();
+    let mut failed_chapters: usize = 0;
 
     // Convert each chapter
     for (i, content_file) in content_files.iter().enumerate() {
@@ -201,8 +201,8 @@ pub async fn convert_epub(
         let file_path = temp_dir.path().join(&content_file.relative_path);
         let xhtml = match tokio::fs::read_to_string(&file_path).await {
             Ok(s) => s,
-            Err(e) => {
-                errors.push(format!("{chapter_name}: 讀取失敗 ({e})"));
+            Err(_) => {
+                failed_chapters += 1;
                 continue;
             }
         };
@@ -210,8 +210,8 @@ pub async fn convert_epub(
         // Extract text
         let (text, count) = match epub::extract_text(&xhtml) {
             Ok(r) => r,
-            Err(e) => {
-                errors.push(format!("{chapter_name}: {e}"));
+            Err(_) => {
+                failed_chapters += 1;
                 continue;
             }
         };
@@ -232,29 +232,29 @@ pub async fn convert_epub(
 
         let resp = match client.0.post(&url).form(&api_params).send().await {
             Ok(r) => r,
-            Err(e) => {
-                errors.push(format!("{chapter_name}: 網路請求失敗 ({e})"));
+            Err(_) => {
+                failed_chapters += 1;
                 continue;
             }
         };
 
         let api: ApiResponse = match resp.json().await {
             Ok(r) => r,
-            Err(e) => {
-                errors.push(format!("{chapter_name}: 回應解析失敗 ({e})"));
+            Err(_) => {
+                failed_chapters += 1;
                 continue;
             }
         };
 
         if api.code != 0 {
-            errors.push(format!("{chapter_name}: API 錯誤 ({})", api.msg));
+            failed_chapters += 1;
             continue;
         }
 
         let data = match api.data {
             Some(d) => d,
             None => {
-                errors.push(format!("{chapter_name}: API 回應缺少 data"));
+                failed_chapters += 1;
                 continue;
             }
         };
@@ -262,14 +262,14 @@ pub async fn convert_epub(
         // Replace text in XHTML
         let new_xhtml = match epub::replace_text(&xhtml, &data.text) {
             Ok(r) => r,
-            Err(e) => {
-                errors.push(format!("{chapter_name}: {e}"));
+            Err(_) => {
+                failed_chapters += 1;
                 continue;
             }
         };
 
-        if let Err(e) = tokio::fs::write(&file_path, new_xhtml).await {
-            errors.push(format!("{chapter_name}: 寫入失敗 ({e})"));
+        if tokio::fs::write(&file_path, new_xhtml).await.is_err() {
+            failed_chapters += 1;
             continue;
         }
 
@@ -284,7 +284,7 @@ pub async fn convert_epub(
     let output_name = build_output_name(input, &naming, &converter, &custom_suffix)?;
     let canonical_dir = tokio::fs::canonicalize(&dir)
         .await
-        .map_err(|e| format!("輸出目錄無效：{e}"))?;
+        .map_err(|e| format!("OUTPUT_DIR_INVALID:{e}"))?;
     let output_path = canonical_dir.join(&output_name);
 
     // Repack EPUB
@@ -292,12 +292,14 @@ pub async fn convert_epub(
     let out_path = output_path.clone();
     tokio::task::spawn_blocking(move || epub::repack_epub(&temp_path, &out_path))
         .await
-        .map_err(|e| format!("打包錯誤：{e}"))??;
+        .map_err(|e| format!("EPUB_REPACK_FAILED:{e}"))??;
 
-    let warnings = if errors.is_empty() {
+    let warnings = if failed_chapters == 0 {
         None
     } else {
-        Some(format!("部分章節失敗：{}", errors.join("；")))
+        Some(format!(
+            "EPUB_PARTIAL_FAILED:{failed_chapters}/{chapter_total}"
+        ))
     };
 
     Ok(ConvertFileResult {

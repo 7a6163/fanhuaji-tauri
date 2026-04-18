@@ -129,7 +129,7 @@ pub(crate) fn build_output_name(
 ) -> Result<String, String> {
     let stem = input
         .file_stem()
-        .ok_or("無法取得檔案名稱")?
+        .ok_or("FILENAME_UNAVAILABLE")?
         .to_string_lossy();
     let ext = input.extension().unwrap_or_default().to_string_lossy();
 
@@ -137,7 +137,7 @@ pub(crate) fn build_output_name(
         "overwrite" => {
             return Ok(input
                 .file_name()
-                .ok_or("無法取得檔案名稱")?
+                .ok_or("FILENAME_UNAVAILABLE")?
                 .to_string_lossy()
                 .into_owned());
         }
@@ -152,7 +152,7 @@ pub(crate) fn build_output_name(
         _ => {
             let s = sanitize_filename_part(converter);
             if s.is_empty() {
-                return Err("API 回應包含無效的轉換器名稱".to_string());
+                return Err("API_INVALID_CONVERTER".to_string());
             }
             s
         }
@@ -236,7 +236,7 @@ pub(crate) fn resolve_output_dir(input: &Path, save_folder: &str) -> Result<Path
     match save_folder {
         "same" => input
             .parent()
-            .ok_or_else(|| "輸入路徑沒有父目錄".to_string())
+            .ok_or_else(|| "NO_PARENT_DIR".to_string())
             .map(|p| p.to_path_buf()),
         custom => Ok(PathBuf::from(custom)),
     }
@@ -244,21 +244,21 @@ pub(crate) fn resolve_output_dir(input: &Path, save_folder: &str) -> Result<Path
 
 pub(crate) fn validate_api_response(api: ApiResponse) -> Result<ApiConvertData, String> {
     if api.code != 0 {
-        return Err(format!("API 錯誤：{}", api.msg));
+        return Err(format!("API_ERROR:{}", api.msg));
     }
-    api.data.ok_or_else(|| "API 回應缺少 data 欄位".to_string())
+    api.data.ok_or_else(|| "API_NO_DATA".to_string())
 }
 
 pub(crate) fn check_file_size(len: u64) -> Result<(), String> {
     if len > MAX_FILE_BYTES {
-        return Err("檔案過大（上限 50 MB）".to_string());
+        return Err("FILE_TOO_LARGE".to_string());
     }
     Ok(())
 }
 
 pub(crate) fn build_service_info(info: ServiceInfoResponse) -> Result<ServiceInfo, String> {
     if info.code != 0 {
-        return Err(format!("服務資訊請求失敗（code: {}）", info.code));
+        return Err(format!("SERVICE_INFO_FAILED:{}", info.code));
     }
 
     let dict_version = info.revisions.and_then(|r| r.build).unwrap_or_default();
@@ -358,7 +358,7 @@ mod tests {
     fn output_name_auto_empty_converter_fails() {
         let result = build_output_name(Path::new("/tmp/test.txt"), "auto", "!@#$", "");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("無效的轉換器名稱"));
+        assert_eq!(result.unwrap_err(), "API_INVALID_CONVERTER");
     }
 
     #[test]
@@ -609,8 +609,7 @@ mod tests {
             data: None,
         };
         let err = validate_api_response(api).unwrap_err();
-        assert!(err.contains("API 錯誤"));
-        assert!(err.contains("some error"));
+        assert_eq!(err, "API_ERROR:some error");
     }
 
     #[test]
@@ -621,7 +620,7 @@ mod tests {
             data: None,
         };
         let err = validate_api_response(api).unwrap_err();
-        assert!(err.contains("data"));
+        assert_eq!(err, "API_NO_DATA");
     }
 
     // --- check_file_size ---
@@ -635,7 +634,7 @@ mod tests {
     #[test]
     fn check_file_size_exceeds_limit() {
         let err = check_file_size(MAX_FILE_BYTES + 1).unwrap_err();
-        assert!(err.contains("50 MB"));
+        assert_eq!(err, "FILE_TOO_LARGE");
     }
 
     // --- build_service_info ---
@@ -668,7 +667,7 @@ mod tests {
             revisions: None,
         };
         let err = build_service_info(info).unwrap_err();
-        assert!(err.contains("500"));
+        assert_eq!(err, "SERVICE_INFO_FAILED:500");
     }
 
     #[test]
