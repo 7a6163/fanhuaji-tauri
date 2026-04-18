@@ -2,7 +2,7 @@ use quick_xml::events::{BytesText, Event};
 use quick_xml::{Reader, Writer};
 use std::fs;
 use std::io::{Cursor, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use tempfile::TempDir;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
@@ -16,12 +16,24 @@ pub struct ContentFile {
 /// Delimiter used to separate text nodes for batch API conversion.
 const TEXT_DELIMITER: &str = "\x00\x01\x00";
 
+/// Zip bomb protection: reject any single entry whose decompressed size
+/// exceeds this limit. 100 MiB comfortably accommodates high-resolution
+/// images and large chapters in legitimate EPUBs.
+const MAX_ENTRY_BYTES: u64 = 100 * 1024 * 1024;
+
+/// Zip bomb protection: reject archives whose cumulative decompressed
+/// size exceeds this limit. 500 MiB is well above typical EPUB sizes
+/// while blocking archives that expand into gigabytes.
+const MAX_TOTAL_BYTES: u64 = 500 * 1024 * 1024;
+
 /// Extract an EPUB ZIP to a temp directory and return content file paths.
 pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), String> {
     let file = fs::File::open(epub_path).map_err(|e| format!("無法開啟 EPUB：{e}"))?;
     let mut archive = ZipArchive::new(file).map_err(|e| format!("無效的 EPUB 檔案：{e}"))?;
 
     let temp_dir = TempDir::new().map_err(|e| format!("無法建立暫存目錄：{e}"))?;
+
+    let mut total_extracted: u64 = 0;
 
     // Extract all files
     for i in 0..archive.len() {
@@ -36,9 +48,30 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
             continue;
         }
 
-        let out_path = temp_dir.path().join(&name);
+        // Reject entries whose declared uncompressed size exceeds the limit
+        // without spending CPU on decompression. The header is untrusted, so
+        // we also enforce the limit during the actual read below.
+        if entry.size() > MAX_ENTRY_BYTES {
+            return Err(format!("EPUB 包含過大的檔案：{name}"));
+        }
 
-        // Prevent ZIP path traversal
+        // Prevent ZIP path traversal. Path::starts_with is component-based
+        // and treats "/tmp/x/../evil" as prefixed by "/tmp/x", so it cannot
+        // catch ".." traversal on its own. Reject absolute paths and any
+        // entry whose components contain ParentDir ("..") or RootDir ("/").
+        let rel = Path::new(&name);
+        if rel.is_absolute()
+            || rel
+                .components()
+                .any(|c| matches!(c, Component::ParentDir | Component::RootDir))
+        {
+            return Err(format!("EPUB 包含不安全的路徑：{name}"));
+        }
+
+        let out_path = temp_dir.path().join(rel);
+
+        // Defence in depth: verify the joined path still sits under the
+        // tempdir root (covers edge cases like Windows drive prefixes).
         if !out_path.starts_with(temp_dir.path()) {
             return Err(format!("EPUB 包含不安全的路徑：{name}"));
         }
@@ -47,10 +80,23 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
             fs::create_dir_all(parent).map_err(|e| format!("無法建立目錄：{e}"))?;
         }
 
+        // Cap the decompressed read to MAX_ENTRY_BYTES + 1 so we can detect
+        // headers that lie about the true uncompressed size (zip bomb).
         let mut buf = Vec::new();
-        entry
+        let limit = MAX_ENTRY_BYTES + 1;
+        (&mut entry)
+            .take(limit)
             .read_to_end(&mut buf)
             .map_err(|e| format!("無法讀取檔案：{e}"))?;
+        if buf.len() as u64 > MAX_ENTRY_BYTES {
+            return Err(format!("EPUB 包含過大的檔案：{name}"));
+        }
+
+        total_extracted = total_extracted.saturating_add(buf.len() as u64);
+        if total_extracted > MAX_TOTAL_BYTES {
+            return Err("EPUB 解壓縮後過大".to_string());
+        }
+
         fs::write(&out_path, &buf).map_err(|e| format!("無法寫入檔案：{e}"))?;
     }
 
@@ -610,6 +656,101 @@ mod tests {
         assert!(result.is_err());
         let msg = result.unwrap_err();
         assert!(msg.contains("無法開啟 EPUB") || msg.contains("EPUB"));
+    }
+
+    #[test]
+    fn extract_epub_rejects_oversized_entry() {
+        // Build an EPUB with one entry that decompresses to > MAX_ENTRY_BYTES.
+        // Repeating 'A' compresses extremely well, so a 101 MiB payload fits
+        // comfortably under the 50 MiB upstream size check.
+        let oversized: Vec<u8> = vec![b'A'; (MAX_ENTRY_BYTES as usize) + 1024];
+        let bytes = build_epub_bytes(&[("OEBPS/huge.xhtml", &oversized)]);
+        let tmp = epub_tempfile(&bytes);
+
+        let result = extract_epub(tmp.path());
+        assert!(result.is_err(), "oversized entry must be rejected");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("過大"),
+            "expected size-limit error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn extract_epub_rejects_path_traversal() {
+        // Build an EPUB with an entry whose name contains ".." to escape
+        // the extraction root. Path::starts_with is structural and does
+        // not catch this on its own — the component-level check must.
+        let buf = Vec::new();
+        let cursor = Cursor::new(buf);
+        let mut zip = ZipWriter::new(cursor);
+        let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/epub+zip").unwrap();
+
+        let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        zip.start_file("../evil.xhtml", deflated).unwrap();
+        zip.write_all(b"<html/>").unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let tmp = epub_tempfile(&bytes);
+        let result = extract_epub(tmp.path());
+        assert!(result.is_err(), "path traversal must be rejected");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("不安全的路徑"),
+            "expected unsafe-path error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn extract_epub_rejects_absolute_path() {
+        // An absolute path like /etc/passwd must also be rejected.
+        let buf = Vec::new();
+        let cursor = Cursor::new(buf);
+        let mut zip = ZipWriter::new(cursor);
+        let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/epub+zip").unwrap();
+
+        let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        zip.start_file("/etc/evil.xhtml", deflated).unwrap();
+        zip.write_all(b"<html/>").unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let tmp = epub_tempfile(&bytes);
+        let result = extract_epub(tmp.path());
+        assert!(result.is_err(), "absolute path must be rejected");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("不安全的路徑"),
+            "expected unsafe-path error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn extract_epub_rejects_cumulative_size_overflow() {
+        // Build an EPUB with many medium-sized entries whose combined size
+        // exceeds MAX_TOTAL_BYTES but whose individual sizes stay below
+        // MAX_ENTRY_BYTES. 6 × 90 MiB = 540 MiB > 500 MiB limit.
+        let medium: Vec<u8> = vec![b'B'; 90 * 1024 * 1024];
+        let extras: Vec<(String, Vec<u8>)> = (0..6)
+            .map(|i| (format!("OEBPS/ch{i}.bin"), medium.clone()))
+            .collect();
+        let extras_ref: Vec<(&str, &[u8])> = extras
+            .iter()
+            .map(|(n, c)| (n.as_str(), c.as_slice()))
+            .collect();
+        let bytes = build_epub_bytes(&extras_ref);
+        let tmp = epub_tempfile(&bytes);
+
+        let result = extract_epub(tmp.path());
+        assert!(result.is_err(), "cumulative overflow must be rejected");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("過大"),
+            "expected size-limit error, got: {msg}"
+        );
     }
 
     // -------------------------------------------------------------------------

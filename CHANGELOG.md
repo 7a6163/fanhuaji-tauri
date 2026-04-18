@@ -2,6 +2,15 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.2.1] - 2026-04-17
+
+### Security
+
+- 修復 rustls-webpki TLS 憑證驗證繞過漏洞（RUSTSEC-2026-0098、RUSTSEC-2026-0099）：升級 `rustls-webpki` 至 0.103.12，防止同網段攻擊者透過憑證名稱限制繞過進行更新通道 MitM
+- 修復 EPUB 解壓縮炸彈（Zip Bomb）漏洞：新增單檔 100 MiB 與累計 500 MiB 解壓上限，防止惡意 EPUB 耗盡磁碟或記憶體
+- 修復 EPUB ZIP slip 路徑穿越漏洞：原先的 `Path::starts_with` 為 component 結構比對，無法偵測 `..` 穿越（如 `/tmp/x/../evil`）；新增 component 層級檢查，拒絕絕對路徑與含 `..` component 的 entry
+- 更新 `rand` 至 0.9.4（RUSTSEC-2026-0097）
+
 ## [2.2.0] - 2026-04-09
 
 ### Added
