@@ -65,7 +65,7 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
                 .components()
                 .any(|c| matches!(c, Component::ParentDir | Component::RootDir))
         {
-            return Err(format!("EPUB 包含不安全的路徑：{name}"));
+            return Err(format!("EPUB_UNSAFE_PATH:{name}"));
         }
 
         let out_path = temp_dir.path().join(rel);
@@ -426,6 +426,31 @@ mod tests {
     }
 
     #[test]
+    fn extract_text_malformed_xml_returns_parse_error() {
+        // Unclosed attribute quote forces quick-xml to emit an Err event.
+        let xhtml = r#"<html><body><p attr="unclosed><</p></body></html>"#;
+        let result = extract_text(xhtml);
+        assert!(result.is_err(), "malformed XML must produce an error");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.starts_with("XML_PARSE_FAILED:") || msg.starts_with("XML_DECODE_FAILED:"),
+            "expected XML parse/decode error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn replace_text_malformed_xml_returns_parse_error() {
+        let xhtml = r#"<html><body><p attr="unclosed><</p></body></html>"#;
+        let result = replace_text(xhtml, "replacement");
+        assert!(result.is_err(), "malformed XML must produce an error");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.starts_with("XML_PARSE_FAILED:") || msg.starts_with("XML_DECODE_FAILED:"),
+            "expected XML parse/decode error, got: {msg}"
+        );
+    }
+
+    #[test]
     fn extract_text_single_segment_no_delimiter() {
         let xhtml = r#"<html><body><p>孤獨段落</p></body></html>"#;
         let (text, count) = extract_text(xhtml).unwrap();
@@ -680,6 +705,36 @@ mod tests {
     }
 
     #[test]
+    fn extract_epub_creates_directory_entries() {
+        // Build an EPUB that includes an explicit directory entry
+        // (trailing slash). extract_epub must call fs::create_dir_all
+        // for the is_dir() branch.
+        let buf = Vec::new();
+        let cursor = Cursor::new(buf);
+        let mut zip = ZipWriter::new(cursor);
+        let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/epub+zip").unwrap();
+
+        let deflated = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+        zip.add_directory("OEBPS/Text/", deflated).unwrap();
+        zip.start_file("OEBPS/Text/chapter.xhtml", deflated)
+            .unwrap();
+        zip.write_all(b"<html><body><p>dir test</p></body></html>")
+            .unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let tmp = epub_tempfile(&bytes);
+        let (dir, _) = extract_epub(tmp.path()).expect("extract should succeed");
+
+        assert!(
+            dir.path().join("OEBPS/Text").is_dir(),
+            "directory entry must be created on disk"
+        );
+        assert!(dir.path().join("OEBPS/Text/chapter.xhtml").exists());
+    }
+
+    #[test]
     fn extract_epub_rejects_path_traversal() {
         // Build an EPUB with an entry whose name contains ".." to escape
         // the extraction root. Path::starts_with is structural and does
@@ -701,8 +756,8 @@ mod tests {
         assert!(result.is_err(), "path traversal must be rejected");
         let msg = result.unwrap_err();
         assert!(
-            msg.contains("不安全的路徑"),
-            "expected unsafe-path error, got: {msg}"
+            msg.starts_with("EPUB_UNSAFE_PATH:"),
+            "expected EPUB_UNSAFE_PATH error, got: {msg}"
         );
     }
 
@@ -726,8 +781,8 @@ mod tests {
         assert!(result.is_err(), "absolute path must be rejected");
         let msg = result.unwrap_err();
         assert!(
-            msg.contains("不安全的路徑"),
-            "expected unsafe-path error, got: {msg}"
+            msg.starts_with("EPUB_UNSAFE_PATH:"),
+            "expected EPUB_UNSAFE_PATH error, got: {msg}"
         );
     }
 
