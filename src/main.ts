@@ -424,9 +424,30 @@ async function loadServiceInfo() {
   try {
     const info: ServiceInfo = await invoke("get_service_info");
     moduleData = info.modules;
+    migrateModuleSettings();
     renderModuleCategories();
   } catch {
     // Service info unavailable — modules panel will be empty
+  }
+}
+
+// Remap any legacy display-name keys to internal API keys.
+function migrateModuleSettings() {
+  const nameToKey = new Map(moduleData.map((m) => [m.name, m.key]));
+  const migrated: Record<string, string> = {};
+  let changed = false;
+  for (const [k, v] of Object.entries(moduleSettings)) {
+    const newKey = nameToKey.get(k);
+    if (newKey && newKey !== k) {
+      migrated[newKey] = v;
+      changed = true;
+    } else {
+      migrated[k] = v;
+    }
+  }
+  if (changed) {
+    moduleSettings = migrated;
+    localStorage.setItem(STORAGE_KEYS.modules, JSON.stringify(moduleSettings));
   }
 }
 
