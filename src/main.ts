@@ -103,6 +103,27 @@ autoConvertCheckbox.addEventListener("change", () => {
 
 // --- Helpers ---
 
+// Format-coloured badges; classes (srt/ass/vtt/epub) get accent treatment in CSS.
+const BADGE_CLASS: Record<string, string> = {
+  srt: "srt",
+  ass: "ass",
+  ssa: "ass",
+  vtt: "vtt",
+  epub: "epub",
+};
+
+function fileExt(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
+function formatBadge(name: string): string {
+  const ext = fileExt(name);
+  const cls = BADGE_CLASS[ext] ?? "";
+  const label = ext ? ext.toUpperCase().slice(0, 4) : "—";
+  return `<span class="fmt-badge ${cls}">${escHtml(label)}</span>`;
+}
+
 function statusIcon(status: FileEntry["status"]): string {
   switch (status) {
     case "pending":
@@ -145,11 +166,123 @@ function render() {
       (f) => `
     <div class="file-item" data-id="${escHtml(f.id)}">
       ${statusIcon(f.status)}
+      ${formatBadge(f.inputName)}
       <span class="file-name" title="${escHtml(`${f.inputPath}/${f.inputName}`)}">${escHtml(f.inputName)}</span>
       <span class="file-message">${f.status === "success" ? escHtml(t("file.convertDone")) : f.status === "converting" ? (f.chapterTotal ? escHtml(t("file.convertingChapter", { current: String(f.chapterIndex), total: String(f.chapterTotal), name: f.chapterName ?? "" })) : escHtml(t("file.converting"))) : escHtml(f.message)}</span>
     </div>`,
     )
     .join("");
+}
+
+// --- Diff preview ---
+
+const previewBackdrop = $<HTMLDivElement>("#preview-backdrop");
+const previewPanel = $<HTMLElement>("#preview-panel");
+const previewBadge = $<HTMLSpanElement>("#preview-badge");
+const previewName = $<HTMLDivElement>("#preview-name");
+const previewStats = $<HTMLDivElement>("#preview-stats");
+const previewBody = $<HTMLDivElement>("#preview-body");
+
+interface PreviewResult {
+  original: string;
+  converted: string;
+  truncated: boolean;
+}
+
+function closePreview(): void {
+  previewPanel.classList.remove("visible");
+  previewBackdrop.classList.remove("visible");
+  previewPanel.setAttribute("aria-hidden", "true");
+}
+
+// Highlight the differing middle of a changed line via common prefix/suffix.
+function lineDiff(original: string, converted: string): { pre: string; mid: string; suf: string } {
+  const al = original.length;
+  const bl = converted.length;
+  let p = 0;
+  while (p < al && p < bl && original[p] === converted[p]) p++;
+  let s = 0;
+  while (s < al - p && s < bl - p && original[al - 1 - s] === converted[bl - 1 - s]) s++;
+  return {
+    pre: converted.slice(0, p),
+    mid: converted.slice(p, bl - s),
+    suf: converted.slice(bl - s),
+  };
+}
+
+function renderDiff(original: string, converted: string): { html: string; changedLines: number } {
+  const oLines = original.split("\n");
+  const cLines = converted.split("\n");
+  const max = Math.max(oLines.length, cLines.length);
+  const rows: string[] = [];
+  let changedLines = 0;
+  for (let i = 0; i < max; i++) {
+    const o = oLines[i] ?? "";
+    const c = cLines[i] ?? "";
+    const num = `<span class="diff-num">${i + 1}</span>`;
+    if (o === c) {
+      rows.push(
+        `<div class="diff-line">${num}<div class="diff-conv">${escHtml(c) || "&nbsp;"}</div></div>`,
+      );
+      continue;
+    }
+    changedLines++;
+    const d = lineDiff(o, c);
+    const conv = `${escHtml(d.pre)}<span class="chg">${escHtml(d.mid)}</span>${escHtml(d.suf)}`;
+    rows.push(
+      `<div class="diff-line changed">${num}<div><div class="diff-orig">${escHtml(o) || "&nbsp;"}</div><div class="diff-conv">${conv}</div></div></div>`,
+    );
+  }
+  return { html: rows.join(""), changedLines };
+}
+
+async function previewFile(file: FileEntry): Promise<void> {
+  const ext = fileExt(file.inputName);
+  previewBadge.className = `fmt-badge ${BADGE_CLASS[ext] ?? ""}`;
+  previewBadge.textContent = ext ? ext.toUpperCase().slice(0, 4) : "—";
+  previewName.textContent = file.inputName;
+  previewBackdrop.classList.add("visible");
+  previewPanel.classList.add("visible");
+  previewPanel.setAttribute("aria-hidden", "false");
+
+  if (isEpubFile(file.inputName)) {
+    previewStats.textContent = "";
+    previewBody.innerHTML = `<div class="preview-loading">${escHtml(t("preview.epubUnsupported"))}</div>`;
+    return;
+  }
+
+  previewStats.textContent = t("preview.converting");
+  previewBody.innerHTML = `<div class="preview-loading"><i class="ti ti-loader-2"></i> ${escHtml(t("preview.loading"))}</div>`;
+
+  try {
+    const converter =
+      (document.getElementById("converter") as HTMLSelectElement | null)?.value ?? "Taiwan";
+    const params = {
+      inputPath: `${file.inputPath}/${file.inputName}`,
+      converter,
+      saveFolder:
+        (document.getElementById("save-folder") as HTMLSelectElement | null)?.value ?? "same",
+      naming: (document.getElementById("naming") as HTMLSelectElement | null)?.value ?? "auto",
+      customSuffix:
+        (document.getElementById("custom-suffix") as HTMLInputElement | null)?.value ?? "",
+      preReplace:
+        (document.getElementById("pre-replace") as HTMLTextAreaElement | null)?.value ?? "",
+      postReplace:
+        (document.getElementById("post-replace") as HTMLTextAreaElement | null)?.value ?? "",
+      protectReplace:
+        (document.getElementById("protect-replace") as HTMLTextAreaElement | null)?.value ?? "",
+      modules: JSON.stringify(buildModuleOverrides(moduleSettings)),
+    };
+    const res = await invoke<PreviewResult>("preview_convert", { params });
+    const diff = renderDiff(res.original, res.converted);
+    const chars = [...res.original].length;
+    previewStats.textContent = `${t("preview.stats", { chars: String(chars), changed: String(diff.changedLines) })}${res.truncated ? ` · ${t("preview.truncated")}` : ""}`;
+    previewBody.innerHTML =
+      diff.html || `<div class="preview-loading">${escHtml(t("preview.empty"))}</div>`;
+  } catch (err) {
+    previewStats.textContent = "";
+    previewBody.innerHTML = `<div class="preview-error"><i class="ti ti-alert-triangle"></i> ${escHtml(translateError(String(err)))}</div>`;
+  }
 }
 
 // --- Progress ---
@@ -306,6 +439,20 @@ function closeSettings() {
 $<HTMLButtonElement>("#btn-settings").addEventListener("click", openSettings);
 $<HTMLButtonElement>("#btn-close-settings").addEventListener("click", closeSettings);
 $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings);
+
+// Click a file row to open its diff preview
+fileItems.addEventListener("click", (e) => {
+  const row = (e.target as HTMLElement).closest<HTMLElement>(".file-item");
+  if (!row) return;
+  const id = row.getAttribute("data-id");
+  const file = files.find((f) => f.id === id);
+  if (file) void previewFile(file);
+});
+$<HTMLButtonElement>("#btn-close-preview").addEventListener("click", closePreview);
+$<HTMLDivElement>("#preview-backdrop").addEventListener("click", closePreview);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && previewPanel.classList.contains("visible")) closePreview();
+});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeSettings();
 });

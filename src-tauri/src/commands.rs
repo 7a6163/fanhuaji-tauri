@@ -144,6 +144,73 @@ pub async fn convert_file(
     })
 }
 
+/// Cap on characters returned to the UI for a preview, to keep payloads small.
+const PREVIEW_CHAR_LIMIT: usize = 8000;
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewResult {
+    original: String,
+    converted: String,
+    truncated: bool,
+}
+
+/// Convert a file via the API and return the original + converted text (capped)
+/// for an on-screen diff preview. Unlike `convert_file`, nothing is written to disk.
+#[tauri::command]
+pub async fn preview_convert(
+    client: tauri::State<'_, HttpClient>,
+    params: ConvertFileParams,
+) -> Result<PreviewResult, String> {
+    // Canonicalize, validate, and read the input — same guards as convert_file.
+    let canonical = tokio::fs::canonicalize(&params.input_path)
+        .await
+        .map_err(|e| format!("INVALID_PATH:{e}"))?;
+    let metadata = tokio::fs::metadata(&canonical)
+        .await
+        .map_err(|e| format!("FILE_METADATA_FAILED:{e}"))?;
+    check_file_size(metadata.len())?;
+    let content = tokio::fs::read_to_string(&canonical)
+        .await
+        .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
+
+    let api_params = build_api_params(
+        &content,
+        &params.converter,
+        &params.pre_replace,
+        &params.post_replace,
+        &params.protect_replace,
+        &params.modules,
+    );
+
+    let url = format!("{API_BASE}/convert");
+    let resp = client
+        .0
+        .post(&url)
+        .form(&api_params)
+        .send()
+        .await
+        .map_err(|e| format!("NET_REQUEST_FAILED:{e}"))?;
+
+    let api: ApiResponse = resp
+        .json()
+        .await
+        .map_err(|e| format!("RESPONSE_PARSE_FAILED:{e}"))?;
+
+    let data = validate_api_response(api)?;
+
+    let truncated = content.chars().count() > PREVIEW_CHAR_LIMIT
+        || data.text.chars().count() > PREVIEW_CHAR_LIMIT;
+    let original: String = content.chars().take(PREVIEW_CHAR_LIMIT).collect();
+    let converted: String = data.text.chars().take(PREVIEW_CHAR_LIMIT).collect();
+
+    Ok(PreviewResult {
+        original,
+        converted,
+        truncated,
+    })
+}
+
 #[tauri::command]
 pub async fn convert_epub(
     app: tauri::AppHandle,
@@ -332,6 +399,7 @@ pub fn run() {
             open_files_dialog,
             convert_file,
             convert_epub,
+            preview_convert,
         ])
         .run(tauri::generate_context!())
         .expect("啟動應用程式時發生錯誤");

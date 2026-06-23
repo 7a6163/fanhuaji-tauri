@@ -132,5 +132,11 @@
   "errors.UTF8_ENCODE_FAILED": "UTF-8 encoding error: {detail}",
   "errors.ZIP_WRITE_FAILED": "ZIP write error: {detail}",
   "errors.ZIP_FINISH_FAILED": "ZIP finalize error: {detail}",
-  "errors.MIMETYPE_READ_FAILED": "Cannot read mimetype: {detail}"
+  "errors.MIMETYPE_READ_FAILED": "Cannot read mimetype: {detail}",
+  "preview.converting": "Previewing conversion…",
+  "preview.loading": "Loading…",
+  "preview.stats": "{chars} chars · {changed} lines changed",
+  "preview.truncated": "showing first part only",
+  "preview.empty": "(empty file)",
+  "preview.epubUnsupported": "EPUB is a binary format; text preview is not supported"
 }

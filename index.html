@@ -9,7 +9,13 @@
     <div class="app">
       <!-- Header -->
       <header class="header">
-        <span class="header-spacer"></span>
+        <div class="brand">
+          <div class="seal" aria-hidden="true">繁</div>
+          <div class="brand-text">
+            <span class="brand-name">繁化姬</span>
+            <span class="brand-sub">FANHUAJI</span>
+          </div>
+        </div>
         <button type="button" id="btn-settings" class="icon-btn" data-i18n-title="header.settings" title="設定">
           <i class="ti ti-settings"></i>
         </button>
@@ -185,6 +191,22 @@
             </section>
           </div>
         </div>
+      </aside>
+
+      <!-- Diff preview -->
+      <div id="preview-backdrop" class="preview-backdrop"></div>
+      <aside id="preview-panel" class="preview-panel" aria-hidden="true" role="dialog" aria-label="轉換預覽">
+        <div class="preview-head">
+          <span id="preview-badge" class="fmt-badge"></span>
+          <div class="preview-title">
+            <div id="preview-name" class="preview-name"></div>
+            <div id="preview-stats" class="preview-stats"></div>
+          </div>
+          <button type="button" id="btn-close-preview" class="icon-btn" aria-label="關閉預覽">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <div id="preview-body" class="preview-body"></div>
       </aside>
     </div>
 
