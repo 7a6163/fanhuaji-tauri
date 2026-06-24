@@ -1,4 +1,8 @@
-# 繁化姬 Tauri 版
+<p align="center">
+  <img src="docs/logo.png" width="96" height="96" alt="繁化姬" />
+</p>
+
+<h1 align="center">繁化姬 Tauri 版</h1>
 
 [![CI](https://github.com/7a6163/fanhuaji-tauri/actions/workflows/ci.yml/badge.svg)](https://github.com/7a6163/fanhuaji-tauri/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/7a6163/fanhuaji-tauri/graph/badge.svg)](https://codecov.io/gh/7a6163/fanhuaji-tauri)
