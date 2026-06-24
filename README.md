@@ -5,6 +5,8 @@
 
 使用 Tauri 2 撰寫的中文繁簡轉換桌面應用程式，使用 [zhconvert.org](https://zhconvert.org) API。
 
+![繁化姬 Tauri 版 — 雙欄佈局與逐句差異預覽](docs/screenshot.png)
+
 ## 下載
 
 前往 [Releases](https://github.com/7a6163/fanhuaji-tauri/releases) 下載最新版本：
