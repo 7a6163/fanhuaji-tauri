@@ -36,6 +36,7 @@ interface ServiceInfo {
 }
 
 interface ModuleInfo {
+  key: string;
   name: string;
   description: string;
   category: string;
@@ -423,9 +424,30 @@ async function loadServiceInfo() {
   try {
     const info: ServiceInfo = await invoke("get_service_info");
     moduleData = info.modules;
+    migrateModuleSettings();
     renderModuleCategories();
   } catch {
     // Service info unavailable — modules panel will be empty
+  }
+}
+
+// Remap any legacy display-name keys to internal API keys.
+function migrateModuleSettings() {
+  const nameToKey = new Map(moduleData.map((m) => [m.name, m.key]));
+  const migrated: Record<string, string> = {};
+  let changed = false;
+  for (const [k, v] of Object.entries(moduleSettings)) {
+    const newKey = nameToKey.get(k);
+    if (newKey && newKey !== k) {
+      migrated[newKey] = v;
+      changed = true;
+    } else {
+      migrated[k] = v;
+    }
+  }
+  if (changed) {
+    moduleSettings = migrated;
+    localStorage.setItem(STORAGE_KEYS.modules, JSON.stringify(moduleSettings));
   }
 }
 
@@ -463,10 +485,10 @@ function renderModuleList() {
     .map(
       (m) => `
     <div class="module-item">
-      <select data-module="${escHtml(m.name)}">
-        <option value="auto"${(moduleSettings[m.name] ?? "auto") === "auto" ? " selected" : ""}>${escHtml(t("module.auto"))}</option>
-        <option value="enable"${moduleSettings[m.name] === "enable" ? " selected" : ""}>${escHtml(t("module.enable"))}</option>
-        <option value="disable"${moduleSettings[m.name] === "disable" ? " selected" : ""}>${escHtml(t("module.disable"))}</option>
+      <select data-module="${escHtml(m.key)}">
+        <option value="auto"${(moduleSettings[m.key] ?? "auto") === "auto" ? " selected" : ""}>${escHtml(t("module.auto"))}</option>
+        <option value="enable"${moduleSettings[m.key] === "enable" ? " selected" : ""}>${escHtml(t("module.enable"))}</option>
+        <option value="disable"${moduleSettings[m.key] === "disable" ? " selected" : ""}>${escHtml(t("module.disable"))}</option>
       </select>
       <span class="module-name">${escHtml(m.name)}</span>
       <span class="module-desc">${escHtml(m.description)}</span>

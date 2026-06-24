@@ -47,6 +47,7 @@ struct Revisions {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct ModuleInfo {
+    key: String,
     name: String,
     description: String,
     category: String,
@@ -221,6 +222,7 @@ fn parse_modules(data: &ServiceInfoData) -> Vec<ModuleInfo> {
                 .cloned()
                 .unwrap_or_else(|| "未知".to_string());
             modules.push(ModuleInfo {
+                key: key.clone(),
                 name,
                 description: desc,
                 category,
@@ -452,6 +454,7 @@ mod tests {
         let modules = parse_modules(&data);
         assert_eq!(modules.len(), 2);
         let naruto = modules.iter().find(|m| m.name == "火影忍者").unwrap();
+        assert_eq!(naruto.key, "Naruto");
         assert_eq!(naruto.description, "日本動畫");
         assert_eq!(naruto.category, "動畫");
     }
@@ -477,6 +480,7 @@ mod tests {
             module_categories: None,
         };
         let modules = parse_modules(&data);
+        assert_eq!(modules[0].key, "MyModule");
         assert_eq!(modules[0].name, "MyModule");
     }
 
