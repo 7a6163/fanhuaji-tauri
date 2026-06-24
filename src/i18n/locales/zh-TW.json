@@ -132,5 +132,11 @@
   "errors.UTF8_ENCODE_FAILED": "UTF-8 編碼錯誤：{detail}",
   "errors.ZIP_WRITE_FAILED": "ZIP 寫入錯誤：{detail}",
   "errors.ZIP_FINISH_FAILED": "ZIP 完成錯誤：{detail}",
-  "errors.MIMETYPE_READ_FAILED": "無法讀取 mimetype：{detail}"
+  "errors.MIMETYPE_READ_FAILED": "無法讀取 mimetype：{detail}",
+  "preview.converting": "預覽轉換中…",
+  "preview.loading": "載入中…",
+  "preview.stats": "{chars} 字 · {changed} 行有變更",
+  "preview.truncated": "僅顯示前段",
+  "preview.empty": "（空白檔案）",
+  "preview.epubUnsupported": "EPUB 為二進位格式，暫不支援文字預覽"
 }

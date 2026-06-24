@@ -132,5 +132,11 @@
   "errors.UTF8_ENCODE_FAILED": "UTF-8 编码错误：{detail}",
   "errors.ZIP_WRITE_FAILED": "ZIP 写入错误：{detail}",
   "errors.ZIP_FINISH_FAILED": "ZIP 完成错误：{detail}",
-  "errors.MIMETYPE_READ_FAILED": "无法读取 mimetype：{detail}"
+  "errors.MIMETYPE_READ_FAILED": "无法读取 mimetype：{detail}",
+  "preview.converting": "预览转换中…",
+  "preview.loading": "加载中…",
+  "preview.stats": "{chars} 字 · {changed} 行有变更",
+  "preview.truncated": "仅显示前段",
+  "preview.empty": "（空白文件）",
+  "preview.epubUnsupported": "EPUB 为二进制格式，暂不支持文字预览"
 }

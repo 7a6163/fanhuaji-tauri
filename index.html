@@ -9,29 +9,97 @@
     <div class="app">
       <!-- Header -->
       <header class="header">
-        <span class="header-spacer"></span>
-        <button type="button" id="btn-settings" class="icon-btn" data-i18n-title="header.settings" title="設定">
-          <i class="ti ti-settings"></i>
-        </button>
-      </header>
-
-      <!-- Main content -->
-      <main class="main">
-        <!-- Empty state: drop zone -->
-        <div id="drop-zone" class="drop-zone" role="button" tabindex="0">
-          <i class="ti ti-cloud-upload"></i>
-          <span class="drop-title" data-i18n="drop.title">拖放檔案到此處</span>
-          <span class="drop-subtitle" data-i18n="drop.subtitle">或 點擊開啟檔案</span>
-          <span class="drop-formats" data-i18n="drop.formats">支援 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB</span>
+        <div class="brand">
+          <div class="seal" aria-hidden="true">繁</div>
+          <div class="brand-text">
+            <span class="brand-name">繁化姬</span>
+            <span class="brand-sub">FANHUAJI</span>
+          </div>
         </div>
-
-        <!-- File list (shown when files exist) -->
-        <div id="file-list" class="file-list hidden">
-          <div id="file-items" class="file-items"></div>
-          <button type="button" id="btn-add-more" class="add-more-btn">
-            <i class="ti ti-plus"></i><span data-i18n="files.addMore">加入更多檔案</span>
+        <div class="toolbar-controls">
+          <div class="mode-seg" id="mode-seg" role="group" aria-label="轉換模式">
+            <button type="button" data-converter="Traditional" data-i18n="converter.Traditional">繁體化</button>
+            <button type="button" data-converter="Taiwan" data-i18n="converter.Taiwan">台灣化</button>
+            <button type="button" data-converter="Hongkong" data-i18n="converter.Hongkong">香港化</button>
+            <button type="button" data-converter="Simplified" data-i18n="converter.Simplified">簡體化</button>
+          </div>
+          <div class="out-pill-wrap">
+            <button type="button" id="out-pill-btn" class="out-pill-btn" aria-haspopup="menu" aria-expanded="false">
+              <i class="ti ti-folder"></i>
+              <span id="out-pill-label">自訂後綴</span>
+              <i class="ti ti-chevron-down out-pill-caret"></i>
+            </button>
+            <div id="out-pop" class="out-pop hidden" role="menu" aria-label="輸出方式">
+              <div class="out-pop-group">輸出方式</div>
+              <button type="button" class="out-opt" data-naming="auto" role="menuitemradio" aria-checked="false">
+                <div class="oo-body">
+                  <div class="oo-title" data-i18n="settings.save.naming.auto">自動命名</div>
+                  <div class="oo-desc">依命名規則自動產生檔名</div>
+                </div>
+                <i class="ti ti-check oo-check"></i>
+              </button>
+              <button type="button" class="out-opt" data-naming="suffix" role="menuitemradio" aria-checked="false">
+                <div class="oo-body">
+                  <div class="oo-title" data-i18n="settings.save.naming.suffix">自訂後綴</div>
+                  <div class="oo-desc">在原檔名後加標記，不覆蓋</div>
+                </div>
+                <i class="ti ti-check oo-check"></i>
+              </button>
+              <button type="button" class="out-opt" data-naming="overwrite" role="menuitemradio" aria-checked="false">
+                <div class="oo-body">
+                  <div class="oo-title" data-i18n="settings.save.naming.overwrite">覆蓋原檔</div>
+                  <div class="oo-desc">直接寫回，建議先備份</div>
+                </div>
+                <i class="ti ti-check oo-check"></i>
+              </button>
+            </div>
+          </div>
+          <button type="button" id="btn-settings" class="icon-btn" data-i18n-title="header.settings" title="設定">
+            <i class="ti ti-settings"></i>
           </button>
         </div>
+      </header>
+
+      <!-- Main content: file queue + live diff preview -->
+      <main class="main">
+        <!-- Left: file queue -->
+        <section class="queue-col">
+          <div class="queue-head">
+            <span class="qh-title">檔案佇列</span>
+            <span class="qh-meta" id="queue-meta"></span>
+            <span class="qh-spacer"></span>
+            <button type="button" id="btn-add-more" class="pane-act">
+              <i class="ti ti-plus"></i><span data-i18n="files.addMore">加入更多檔案</span>
+            </button>
+          </div>
+          <div class="queue-scroll">
+            <div id="drop-zone" class="drop-zone queue-drop" role="button" tabindex="0">
+              <i class="ti ti-cloud-upload"></i>
+              <span class="drop-title" data-i18n="drop.title">拖放檔案到此處</span>
+              <span class="drop-formats" data-i18n="drop.formats">支援 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB</span>
+            </div>
+            <div id="file-items" class="file-items"></div>
+          </div>
+        </section>
+
+        <!-- Right: live diff preview -->
+        <section class="preview-col">
+          <div id="preview-empty" class="preview-empty">
+            <div class="pe-icon"><i class="ti ti-file-text"></i></div>
+            <div class="pe-title">選一個檔案來預覽</div>
+            <div class="pe-sub">左側點選檔案，即時顯示逐句「原文 → 轉換後」對照</div>
+          </div>
+          <div id="preview-pane" class="preview-pane-inline hidden">
+            <div class="preview-head">
+              <span id="preview-badge" class="fmt-badge"></span>
+              <div class="preview-title">
+                <div id="preview-name" class="preview-name"></div>
+                <div id="preview-stats" class="preview-stats"></div>
+              </div>
+            </div>
+            <div id="preview-body" class="preview-body"></div>
+          </div>
+        </section>
       </main>
 
       <!-- Progress bar -->
@@ -41,13 +109,18 @@
 
       <!-- Status bar -->
       <footer id="status-bar" class="status-bar hidden">
-        <span class="status-badge blue"><span data-i18n="status.total">全部:</span> <span id="count-total">0</span></span>
-        <span class="status-badge green"><span data-i18n="status.success">完成:</span> <span id="count-success">0</span></span>
-        <span class="status-badge red"><span data-i18n="status.error">錯誤:</span> <span id="count-error">0</span></span>
+        <span class="stat mode"><i class="ti ti-arrows-transfer-up"></i> <span id="status-mode"></span></span>
+        <span class="stat-divider"></span>
+        <span class="stat"><span class="n" id="count-total">0</span> 檔</span>
+        <span class="stat ok"><span data-i18n="status.success">完成:</span> <span class="n" id="count-success">0</span></span>
+        <span class="stat err"><span data-i18n="status.error">錯誤:</span> <span class="n" id="count-error">0</span></span>
         <span class="status-spacer"></span>
-        <button type="button" id="btn-convert" class="status-action accent hidden" data-i18n="status.convert">開始轉換</button>
         <button type="button" id="btn-clear" class="status-action" data-i18n="status.clear">清除列表</button>
         <button type="button" id="btn-retry" class="status-action hidden" data-i18n="status.retry">重試失敗</button>
+        <button type="button" id="btn-convert" class="status-action accent hidden">
+          <i class="ti ti-player-play-filled"></i>
+          <span data-i18n="status.convert">開始轉換</span> <span id="convert-count"></span>
+        </button>
       </footer>
 
       <!-- Settings drawer -->
@@ -186,6 +259,7 @@
           </div>
         </div>
       </aside>
+
     </div>
 
     <script type="module" src="/src/main.ts"></script>
