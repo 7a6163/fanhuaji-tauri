@@ -76,7 +76,6 @@ const $ = <T extends HTMLElement>(sel: string): T => {
 };
 
 const dropZone = $<HTMLDivElement>("#drop-zone");
-const fileList = $<HTMLDivElement>("#file-list");
 const fileItems = $<HTMLDivElement>("#file-items");
 const progressBarContainer = $<HTMLDivElement>("#progress-bar-container");
 const progressBar = $<HTMLDivElement>("#progress-bar");
@@ -86,6 +85,8 @@ const countSuccess = $<HTMLSpanElement>("#count-success");
 const countError = $<HTMLSpanElement>("#count-error");
 const retryBtn = $<HTMLButtonElement>("#btn-retry");
 const convertBtn = $<HTMLButtonElement>("#btn-convert");
+const convertCount = $<HTMLSpanElement>("#convert-count");
+const statusMode = $<HTMLSpanElement>("#status-mode");
 const autoConvertCheckbox = $<HTMLInputElement>("#auto-convert");
 
 // --- Auto-convert ---
@@ -139,12 +140,32 @@ function statusIcon(status: FileEntry["status"]): string {
 
 // --- Render ---
 
+function fileMessage(f: FileEntry): string {
+  if (f.status === "success") return escHtml(t("file.convertDone"));
+  if (f.status === "converting") {
+    return f.chapterTotal
+      ? escHtml(
+          t("file.convertingChapter", {
+            current: String(f.chapterIndex),
+            total: String(f.chapterTotal),
+            name: f.chapterName ?? "",
+          }),
+        )
+      : escHtml(t("file.converting"));
+  }
+  if (f.status === "error") return escHtml(f.message);
+  // pending: show the format name as a neutral subtitle
+  return escHtml(fileExt(f.inputName).toUpperCase() || "—");
+}
+
 function render() {
   const isEmpty = files.length === 0;
 
-  dropZone.classList.toggle("hidden", !isEmpty);
-  fileList.classList.toggle("hidden", isEmpty);
   statusBar.classList.toggle("hidden", isEmpty);
+  queueMeta.textContent = isEmpty ? "" : `· ${files.length} 檔`;
+
+  // Drop the preview back to its empty state if the selected file is gone.
+  if (selectedId && !files.some((f) => f.id === selectedId)) showEmptyPreview();
 
   // Show retry button if there are errors
   const hasErrors = files.some((f) => f.status === "error");
@@ -159,16 +180,19 @@ function render() {
   countTotal.textContent = String(counts.total);
   countSuccess.textContent = String(counts.success);
   countError.textContent = String(counts.error);
+  convertCount.textContent = isEmpty ? "" : `(${files.length})`;
 
-  // File items
+  // File cards
   fileItems.innerHTML = files
     .map(
       (f) => `
-    <div class="file-item" data-id="${escHtml(f.id)}">
-      ${statusIcon(f.status)}
+    <div class="file-card" data-id="${escHtml(f.id)}" aria-selected="${f.id === selectedId}">
       ${formatBadge(f.inputName)}
-      <span class="file-name" title="${escHtml(`${f.inputPath}/${f.inputName}`)}">${escHtml(f.inputName)}</span>
-      <span class="file-message">${f.status === "success" ? escHtml(t("file.convertDone")) : f.status === "converting" ? (f.chapterTotal ? escHtml(t("file.convertingChapter", { current: String(f.chapterIndex), total: String(f.chapterTotal), name: f.chapterName ?? "" })) : escHtml(t("file.converting"))) : escHtml(f.message)}</span>
+      <div class="fc-body">
+        <div class="fc-name" title="${escHtml(`${f.inputPath}/${f.inputName}`)}">${escHtml(f.inputName)}</div>
+        <div class="fc-meta">${fileMessage(f)}</div>
+      </div>
+      <div class="fc-status">${statusIcon(f.status)}</div>
     </div>`,
     )
     .join("");
@@ -176,12 +200,15 @@ function render() {
 
 // --- Diff preview ---
 
-const previewBackdrop = $<HTMLDivElement>("#preview-backdrop");
-const previewPanel = $<HTMLElement>("#preview-panel");
+const previewPane = $<HTMLElement>("#preview-pane");
+const previewEmpty = $<HTMLDivElement>("#preview-empty");
+const queueMeta = $<HTMLSpanElement>("#queue-meta");
 const previewBadge = $<HTMLSpanElement>("#preview-badge");
 const previewName = $<HTMLDivElement>("#preview-name");
 const previewStats = $<HTMLDivElement>("#preview-stats");
 const previewBody = $<HTMLDivElement>("#preview-body");
+
+let selectedId: string | null = null;
 
 interface PreviewResult {
   original: string;
@@ -189,10 +216,11 @@ interface PreviewResult {
   truncated: boolean;
 }
 
-function closePreview(): void {
-  previewPanel.classList.remove("visible");
-  previewBackdrop.classList.remove("visible");
-  previewPanel.setAttribute("aria-hidden", "true");
+// Return the right pane to its empty state and clear the selection.
+function showEmptyPreview(): void {
+  selectedId = null;
+  previewPane.classList.add("hidden");
+  previewEmpty.classList.remove("hidden");
 }
 
 // Highlight the differing middle of a changed line via common prefix/suffix.
@@ -210,30 +238,109 @@ function lineDiff(original: string, converted: string): { pre: string; mid: stri
   };
 }
 
-function renderDiff(original: string, converted: string): { html: string; changedLines: number } {
-  const oLines = original.split("\n");
-  const cLines = converted.split("\n");
-  const max = Math.max(oLines.length, cLines.length);
-  const rows: string[] = [];
-  let changedLines = 0;
-  for (let i = 0; i < max; i++) {
-    const o = oLines[i] ?? "";
-    const c = cLines[i] ?? "";
-    const num = `<span class="diff-num">${i + 1}</span>`;
-    if (o === c) {
-      rows.push(
-        `<div class="diff-line">${num}<div class="diff-conv">${escHtml(c) || "&nbsp;"}</div></div>`,
-      );
-      continue;
+type DiffRow =
+  | { t: "equal"; conv: string }
+  | { t: "replace"; orig: string; conv: string }
+  | { t: "insert"; conv: string }
+  | { t: "delete"; orig: string };
+
+// Line-level LCS diff. zhconvert prepends a watermark block (a cue "0" +
+// "Processed by 繁化姬 … zhconvert.org") to subtitle output; a naive index
+// alignment would then mark every following line as changed. LCS treats the
+// watermark as an insertion and keeps the rest aligned.
+function diffLines(o: string[], c: string[]): DiffRow[] {
+  const n = o.length;
+  const m = c.length;
+
+  // Guard against pathological inputs (e.g. a file of single-character lines).
+  if (n * m > 4_000_000) {
+    const max = Math.max(n, m);
+    const rows: DiffRow[] = [];
+    for (let i = 0; i < max; i++) {
+      const a = o[i] ?? "";
+      const b = c[i] ?? "";
+      rows.push(a === b ? { t: "equal", conv: b } : { t: "replace", orig: a, conv: b });
     }
-    changedLines++;
-    const d = lineDiff(o, c);
-    const conv = `${escHtml(d.pre)}<span class="chg">${escHtml(d.mid)}</span>${escHtml(d.suf)}`;
-    rows.push(
-      `<div class="diff-line changed">${num}<div><div class="diff-orig">${escHtml(o) || "&nbsp;"}</div><div class="diff-conv">${conv}</div></div></div>`,
-    );
+    return rows;
   }
-  return { html: rows.join(""), changedLines };
+
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = o[i] === c[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const rows: DiffRow[] = [];
+  const dels: string[] = [];
+  const inss: string[] = [];
+  // Pair a run of deletes with the following run of inserts as char-highlighted
+  // replaces; leftovers become pure insert/delete rows.
+  const flush = () => {
+    const pairs = Math.max(dels.length, inss.length);
+    for (let p = 0; p < pairs; p++) {
+      const od = dels[p];
+      const ic = inss[p];
+      if (od !== undefined && ic !== undefined) rows.push({ t: "replace", orig: od, conv: ic });
+      else if (ic !== undefined) rows.push({ t: "insert", conv: ic });
+      else rows.push({ t: "delete", orig: od });
+    }
+    dels.length = 0;
+    inss.length = 0;
+  };
+
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (o[i] === c[j]) {
+      flush();
+      rows.push({ t: "equal", conv: c[j] });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      dels.push(o[i++]);
+    } else {
+      inss.push(c[j++]);
+    }
+  }
+  while (i < n) dels.push(o[i++]);
+  while (j < m) inss.push(c[j++]);
+  flush();
+  return rows;
+}
+
+function renderDiff(original: string, converted: string): { html: string; changedLines: number } {
+  const rows = diffLines(original.split("\n"), converted.split("\n"));
+  const out: string[] = [];
+  let changedLines = 0;
+  let ln = 0; // converted-side line number for display
+  for (const r of rows) {
+    if (r.t === "equal") {
+      ln++;
+      out.push(
+        `<div class="diff-line"><span class="diff-num">${ln}</span><div class="diff-conv">${escHtml(r.conv) || "&nbsp;"}</div></div>`,
+      );
+    } else if (r.t === "replace") {
+      ln++;
+      changedLines++;
+      const d = lineDiff(r.orig, r.conv);
+      const conv = `${escHtml(d.pre)}<span class="chg">${escHtml(d.mid)}</span>${escHtml(d.suf)}`;
+      out.push(
+        `<div class="diff-line changed"><span class="diff-num">${ln}</span><div><div class="diff-orig">${escHtml(r.orig) || "&nbsp;"}</div><div class="diff-conv">${conv}</div></div></div>`,
+      );
+    } else if (r.t === "insert") {
+      ln++;
+      changedLines++;
+      out.push(
+        `<div class="diff-line added"><span class="diff-num">${ln}</span><div class="diff-conv"><span class="chg">${escHtml(r.conv) || "&nbsp;"}</span></div></div>`,
+      );
+    } else {
+      out.push(
+        `<div class="diff-line removed"><span class="diff-num">−</span><div class="diff-orig">${escHtml(r.orig) || "&nbsp;"}</div></div>`,
+      );
+    }
+  }
+  return { html: out.join(""), changedLines };
 }
 
 async function previewFile(file: FileEntry): Promise<void> {
@@ -241,9 +348,10 @@ async function previewFile(file: FileEntry): Promise<void> {
   previewBadge.className = `fmt-badge ${BADGE_CLASS[ext] ?? ""}`;
   previewBadge.textContent = ext ? ext.toUpperCase().slice(0, 4) : "—";
   previewName.textContent = file.inputName;
-  previewBackdrop.classList.add("visible");
-  previewPanel.classList.add("visible");
-  previewPanel.setAttribute("aria-hidden", "false");
+  selectedId = file.id;
+  previewEmpty.classList.add("hidden");
+  previewPane.classList.remove("hidden");
+  render();
 
   if (isEpubFile(file.inputName)) {
     previewStats.textContent = "";
@@ -322,6 +430,9 @@ function addFiles(paths: string[]) {
   });
   files = [...files, ...newFiles];
   render();
+  // Show the diff preview for the first newly-added file so dropping a file
+  // always surfaces a preview, regardless of the auto-convert setting.
+  if (newFiles.length > 0) void previewFile(newFiles[0]);
   if (isAutoConvert()) {
     void convertPending();
   }
@@ -440,19 +551,87 @@ $<HTMLButtonElement>("#btn-settings").addEventListener("click", openSettings);
 $<HTMLButtonElement>("#btn-close-settings").addEventListener("click", closeSettings);
 $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings);
 
-// Click a file row to open its diff preview
+// Click a file card to load its diff preview in the right pane
 fileItems.addEventListener("click", (e) => {
-  const row = (e.target as HTMLElement).closest<HTMLElement>(".file-item");
-  if (!row) return;
-  const id = row.getAttribute("data-id");
+  const card = (e.target as HTMLElement).closest<HTMLElement>(".file-card");
+  if (!card) return;
+  const id = card.getAttribute("data-id");
   const file = files.find((f) => f.id === id);
   if (file) void previewFile(file);
 });
-$<HTMLButtonElement>("#btn-close-preview").addEventListener("click", closePreview);
-$<HTMLDivElement>("#preview-backdrop").addEventListener("click", closePreview);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && previewPanel.classList.contains("visible")) closePreview();
+
+// Toolbar mode segmented control — drives the same converter as Settings.
+const modeSeg = $<HTMLDivElement>("#mode-seg");
+const converterSelect = $<HTMLSelectElement>("#converter");
+function syncModeSeg(): void {
+  for (const b of modeSeg.querySelectorAll<HTMLButtonElement>("button[data-converter]")) {
+    b.setAttribute("aria-pressed", String(b.dataset.converter === converterSelect.value));
+  }
+}
+modeSeg.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-converter]");
+  if (!btn) return;
+  converterSelect.value = btn.dataset.converter ?? "Taiwan";
+  converterSelect.dispatchEvent(new Event("change"));
 });
+// Keep the segmented state in sync and re-preview when the converter changes
+// (whether from the segmented control or the Settings drawer).
+function syncStatusMode(): void {
+  statusMode.textContent = converterSelect.selectedOptions[0]?.text ?? "";
+}
+converterSelect.addEventListener("change", () => {
+  syncModeSeg();
+  syncStatusMode();
+  if (selectedId) {
+    const f = files.find((x) => x.id === selectedId);
+    if (f) void previewFile(f);
+  }
+});
+syncModeSeg();
+syncStatusMode();
+
+// Toolbar output-naming pill — custom popover bound to the Settings naming select.
+const namingSelect = $<HTMLSelectElement>("#naming");
+const outPillBtn = $<HTMLButtonElement>("#out-pill-btn");
+const outPillLabel = $<HTMLSpanElement>("#out-pill-label");
+const outPop = $<HTMLDivElement>("#out-pop");
+
+function syncOutPill(): void {
+  for (const opt of outPop.querySelectorAll<HTMLButtonElement>(".out-opt")) {
+    const on = opt.dataset.naming === namingSelect.value;
+    opt.setAttribute("aria-checked", String(on));
+    if (on) outPillLabel.textContent = opt.querySelector(".oo-title")?.textContent ?? "";
+  }
+}
+function closeOutPop(): void {
+  outPop.classList.add("hidden");
+  outPillBtn.setAttribute("aria-expanded", "false");
+}
+outPillBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const nowHidden = outPop.classList.toggle("hidden");
+  outPillBtn.setAttribute("aria-expanded", String(!nowHidden));
+});
+outPop.addEventListener("click", (e) => {
+  const opt = (e.target as HTMLElement).closest<HTMLButtonElement>(".out-opt");
+  if (!opt) return;
+  namingSelect.value = opt.dataset.naming ?? "auto";
+  namingSelect.dispatchEvent(new Event("change"));
+  closeOutPop();
+});
+document.addEventListener("click", (e) => {
+  if (
+    !outPop.classList.contains("hidden") &&
+    !(e.target as HTMLElement).closest(".out-pill-wrap")
+  ) {
+    closeOutPop();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeOutPop();
+});
+namingSelect.addEventListener("change", syncOutPill);
+syncOutPill();
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeSettings();
 });
