@@ -2,6 +2,12 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.4.1] - 2026-07-06
+
+### Fixed
+
+- 修復無法讀取非 UTF-8 編碼字幕檔的問題：`convert_file` 與 `preview_convert` 原先以 `read_to_string` 讀檔，遇到 Big5、GBK/GB18030、Shift_JIS、UTF-16 等編碼會直接以 `FILE_READ_FAILED` 失敗；改為讀取原始位元組並自動偵測編碼（BOM 優先，其餘以 `chardetng` 猜測）後解碼為 UTF-8
+
 ## [2.3.0] - 2026-04-17
 
 ### Added
