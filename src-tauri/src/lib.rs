@@ -258,6 +258,25 @@ pub(crate) fn check_file_size(len: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// Decode raw file bytes into a UTF-8 `String`, detecting the source encoding.
+///
+/// A leading BOM (UTF-8 / UTF-16) is honoured first; otherwise the charset is
+/// guessed with `chardetng` (the detector Firefox uses), covering common
+/// subtitle encodings such as Big5, GBK/GB18030, Shift_JIS and EUC. Returns the
+/// decoded text along with the detected encoding's canonical name.
+pub(crate) fn decode_text(bytes: &[u8]) -> (String, &'static str) {
+    if let Some((enc, _)) = encoding_rs::Encoding::for_bom(bytes) {
+        let (text, _, _) = enc.decode(bytes);
+        return (text.into_owned(), enc.name());
+    }
+
+    let mut detector = chardetng::EncodingDetector::new();
+    detector.feed(bytes, true);
+    let enc = detector.guess(None, true);
+    let (text, _, _) = enc.decode(bytes);
+    (text.into_owned(), enc.name())
+}
+
 pub(crate) fn build_service_info(info: ServiceInfoResponse) -> Result<ServiceInfo, String> {
     if info.code != 0 {
         return Err(format!("SERVICE_INFO_FAILED:{}", info.code));
@@ -316,6 +335,54 @@ mod tests {
     #[test]
     fn sanitize_mixed_content() {
         assert_eq!(sanitize_filename_part("a!@#b$%^c"), "abc");
+    }
+
+    // --- decode_text ---
+
+    #[test]
+    fn decode_plain_utf8() {
+        let (text, _) = decode_text("繁化姬".as_bytes());
+        assert_eq!(text, "繁化姬");
+    }
+
+    #[test]
+    fn decode_utf8_with_bom() {
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend_from_slice("字幕".as_bytes());
+        let (text, _) = decode_text(&bytes);
+        assert_eq!(text, "字幕");
+    }
+
+    #[test]
+    fn decode_utf16le_with_bom() {
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in "字幕".encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        let (text, _) = decode_text(&bytes);
+        assert_eq!(text, "字幕");
+    }
+
+    #[test]
+    fn decode_big5() {
+        let (bytes, _, had_errors) = encoding_rs::BIG5.encode("台灣繁體字幕測試內容夠長以利偵測");
+        assert!(!had_errors);
+        let (text, _) = decode_text(&bytes);
+        assert_eq!(text, "台灣繁體字幕測試內容夠長以利偵測");
+    }
+
+    #[test]
+    fn decode_gbk() {
+        let (bytes, _, had_errors) = encoding_rs::GBK.encode("简体中文字幕测试内容够长以利侦测");
+        assert!(!had_errors);
+        let (text, _) = decode_text(&bytes);
+        assert_eq!(text, "简体中文字幕测试内容够长以利侦测");
+    }
+
+    #[test]
+    fn decode_empty_is_empty() {
+        let (text, _) = decode_text(&[]);
+        assert_eq!(text, "");
     }
 
     // --- build_output_name ---
