@@ -2,7 +2,7 @@ use crate::build_service_info;
 use crate::epub;
 use crate::{
     API_BASE, ApiResponse, ConvertEpubParams, ConvertFileParams, ConvertFileResult, EpubProgress,
-    HttpClient, ServiceInfo, build_api_params, build_output_name, check_file_size,
+    HttpClient, ServiceInfo, build_api_params, build_output_name, check_file_size, decode_text,
     resolve_output_dir, validate_api_response,
 };
 use std::path::Path;
@@ -88,10 +88,12 @@ pub async fn convert_file(
         .map_err(|e| format!("FILE_METADATA_FAILED:{e}"))?;
     check_file_size(metadata.len())?;
 
-    // Read the file
-    let content = tokio::fs::read_to_string(&canonical)
+    // Read the file as raw bytes and decode with charset detection so that
+    // non-UTF-8 subtitle files (Big5, GBK, Shift_JIS, UTF-16, ...) are handled.
+    let raw = tokio::fs::read(&canonical)
         .await
         .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
+    let (content, _encoding) = decode_text(&raw);
 
     // Build API params
     let params = build_api_params(
@@ -170,9 +172,10 @@ pub async fn preview_convert(
         .await
         .map_err(|e| format!("FILE_METADATA_FAILED:{e}"))?;
     check_file_size(metadata.len())?;
-    let content = tokio::fs::read_to_string(&canonical)
+    let raw = tokio::fs::read(&canonical)
         .await
         .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
+    let (content, _encoding) = decode_text(&raw);
 
     let api_params = build_api_params(
         &content,
