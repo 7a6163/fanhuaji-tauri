@@ -87,6 +87,7 @@
   "update.checking": "正在检查…",
   "update.upToDate": "当前已是最新版本。",
   "update.found": "发现新版本 {version}",
+  "update.portableAvailable": "发现新版本 {version}，便携版无法自动更新，请至 GitHub Releases 下载最新的便携版。",
   "update.confirm": "发现新版本 {version}，是否要下载并安装？",
   "update.downloading": "正在下载更新…",
   "update.restarting": "下载完成，即将重新启动…",

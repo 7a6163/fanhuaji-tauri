@@ -87,6 +87,7 @@
   "update.checking": "Checking\u2026",
   "update.upToDate": "You are up to date.",
   "update.found": "New version {version} available",
+  "update.portableAvailable": "New version {version} available. Portable builds cannot auto-update; please download the latest portable ZIP from GitHub Releases.",
   "update.confirm": "New version {version} is available. Download and install?",
   "update.downloading": "Downloading update\u2026",
   "update.restarting": "Download complete, restarting\u2026",
