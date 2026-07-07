@@ -144,12 +144,13 @@ describe("updater", () => {
       };
       mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
       mockInvoke.mockResolvedValue(true); // is_portable = true
+      const confirmSpy = vi.spyOn(window, "confirm");
 
       await checkForUpdates(false);
       const status = document.getElementById("update-status");
       expect(status?.textContent).toContain("攜帶版無法自動更新");
       expect(mockUpdate.downloadAndInstall).not.toHaveBeenCalled();
-      expect(window.confirm).not.toHaveBeenCalled();
+      expect(confirmSpy).not.toHaveBeenCalled();
     });
 
     it("does not download or install when portable", async () => {
