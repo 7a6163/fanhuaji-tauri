@@ -81,6 +81,7 @@
   "file.convertDoneWithWarnings": "轉換完成（{warnings}）",
   "file.converting": "轉換中…",
   "file.convertingChapter": "轉換中… ({current}/{total} {name})",
+  "queue.count": "· {count} 檔",
 
   "dom.missingElement": "必要元素不存在：{selector}",
 

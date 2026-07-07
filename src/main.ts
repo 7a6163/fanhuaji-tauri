@@ -163,7 +163,7 @@ function render() {
   const isEmpty = files.length === 0;
 
   statusBar.classList.toggle("hidden", isEmpty);
-  queueMeta.textContent = isEmpty ? "" : `· ${files.length} 檔`;
+  queueMeta.textContent = isEmpty ? "" : t("queue.count", { count: String(files.length) });
 
   // Drop the preview back to its empty state if the selected file is gone.
   if (selectedId && !files.some((f) => f.id === selectedId)) showEmptyPreview();
@@ -914,6 +914,7 @@ if (localeSelect) {
     setLocale(localeSelect.value as Locale);
     render();
     renderModuleList();
+    syncOutPill();
     void initVersion();
   });
 }
