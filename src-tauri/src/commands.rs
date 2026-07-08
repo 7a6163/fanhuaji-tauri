@@ -379,6 +379,18 @@ pub async fn convert_epub(
     })
 }
 
+/// Returns `true` when this build is the Windows portable distribution, which
+/// is detected by a `portable` marker file shipped next to the executable.
+/// Portable builds cannot self-update in place (the Tauri Windows updater only
+/// runs an installer), so the frontend uses this to switch to a notify-only flow.
+#[tauri::command]
+pub fn is_portable() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("portable").exists()))
+        .unwrap_or(false)
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(HttpClient(
@@ -403,6 +415,7 @@ pub fn run() {
             convert_file,
             convert_epub,
             preview_convert,
+            is_portable,
         ])
         .run(tauri::generate_context!())
         .expect("啟動應用程式時發生錯誤");

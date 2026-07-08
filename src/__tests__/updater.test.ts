@@ -9,14 +9,22 @@ vi.mock("@tauri-apps/plugin-process", () => ({
   relaunch: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { checkForUpdates, initUpdater } from "../updater";
 
 const mockCheck = vi.mocked(check);
+const mockInvoke = vi.mocked(invoke);
 
 describe("updater", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: not portable (installed build)
+    mockInvoke.mockResolvedValue(false);
     document.body.innerHTML = `
       <div id="update-status"></div>
       <button id="btn-check-update"></button>
@@ -127,6 +135,47 @@ describe("updater", () => {
       const status = document.getElementById("update-status");
       expect(status?.textContent).toContain("network error");
       consoleSpy.mockRestore();
+    });
+
+    it("shows portableAvailable message when portable and update found", async () => {
+      const mockUpdate = {
+        version: "2.0.0",
+        downloadAndInstall: vi.fn(),
+      };
+      mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
+      mockInvoke.mockResolvedValue(true); // is_portable = true
+      const confirmSpy = vi.spyOn(window, "confirm");
+
+      await checkForUpdates(false);
+      const status = document.getElementById("update-status");
+      expect(status?.textContent).toContain("攜帶版無法自動更新");
+      expect(mockUpdate.downloadAndInstall).not.toHaveBeenCalled();
+      expect(confirmSpy).not.toHaveBeenCalled();
+    });
+
+    it("does not download or install when portable", async () => {
+      const mockUpdate = {
+        version: "2.0.0",
+        downloadAndInstall: vi.fn(),
+      };
+      mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
+      mockInvoke.mockResolvedValue(true);
+
+      await checkForUpdates(false);
+      expect(mockUpdate.downloadAndInstall).not.toHaveBeenCalled();
+    });
+
+    it("falls back to normal flow when invoke throws", async () => {
+      const mockUpdate = {
+        version: "2.0.0",
+        downloadAndInstall: vi.fn().mockResolvedValue(undefined),
+      };
+      mockCheck.mockResolvedValue(mockUpdate as unknown as Update);
+      mockInvoke.mockRejectedValue(new Error("command not found"));
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+
+      await checkForUpdates(false);
+      expect(mockUpdate.downloadAndInstall).toHaveBeenCalled();
     });
   });
 

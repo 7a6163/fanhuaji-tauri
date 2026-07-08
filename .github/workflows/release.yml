@@ -97,7 +97,11 @@ jobs:
             Write-Host "Packaging: $($exe.FullName)"
             $version = "${{ github.ref_name }}"
             $zipName = "Fanhuaji-${version}-windows-portable.zip"
-            Compress-Archive -Path $exe.FullName -DestinationPath $zipName
+            # Marker file so the app detects the portable build at runtime and
+            # switches the updater to notify-only (no in-place self-update on Windows).
+            $marker = Join-Path $relDir "portable"
+            Set-Content -Path $marker -Value "This file marks the Fanhuaji portable build. Do not remove it." -NoNewline
+            Compress-Archive -Path $exe.FullName, $marker -DestinationPath $zipName
             gh release upload ${{ github.ref_name }} $zipName --clobber
             Write-Host "Uploaded: $zipName"
           } else {

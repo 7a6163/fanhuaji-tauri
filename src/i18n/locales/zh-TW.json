@@ -81,12 +81,14 @@
   "file.convertDoneWithWarnings": "轉換完成（{warnings}）",
   "file.converting": "轉換中…",
   "file.convertingChapter": "轉換中… ({current}/{total} {name})",
+  "queue.count": "· {count} 檔",
 
   "dom.missingElement": "必要元素不存在：{selector}",
 
   "update.checking": "正在檢查…",
   "update.upToDate": "目前已是最新版本。",
   "update.found": "發現新版本 {version}",
+  "update.portableAvailable": "發現新版本 {version}，攜帶版無法自動更新，請至 GitHub Releases 下載最新的攜帶版。",
   "update.confirm": "發現新版本 {version}，是否要下載並安裝？",
   "update.downloading": "正在下載更新…",
   "update.restarting": "下載完成，即將重新啟動…",

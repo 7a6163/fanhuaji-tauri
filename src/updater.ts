@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { t } from "./i18n/i18n";
@@ -7,6 +8,14 @@ function setUpdateStatus(msg: string) {
   if (el) el.textContent = msg;
 }
 
+async function isPortableBuild(): Promise<boolean> {
+  try {
+    return await invoke<boolean>("is_portable");
+  } catch {
+    return false;
+  }
+}
+
 export async function checkForUpdates(silent = false): Promise<void> {
   if (!silent) setUpdateStatus(t("update.checking"));
 
@@ -14,6 +23,13 @@ export async function checkForUpdates(silent = false): Promise<void> {
     const update = await check();
     if (!update) {
       setUpdateStatus(silent ? "" : t("update.upToDate"));
+      return;
+    }
+
+    // Portable Windows builds cannot self-update in place (the updater would
+    // run an installer that installs a separate copy), so only notify the user.
+    if (await isPortableBuild()) {
+      setUpdateStatus(t("update.portableAvailable", { version: update.version }));
       return;
     }
 
