@@ -664,6 +664,9 @@ restoreSetting("pre-replace", STORAGE_KEYS.preReplace);
 restoreSetting("post-replace", STORAGE_KEYS.postReplace);
 restoreSetting("protect-replace", STORAGE_KEYS.protectReplace);
 
+// Refresh the toolbar output pill after restoring the naming select.
+syncOutPill();
+
 persistOnChange("converter", STORAGE_KEYS.converter);
 persistOnChange("naming", STORAGE_KEYS.naming);
 persistOnChange("pre-replace", STORAGE_KEYS.preReplace);
