@@ -38,7 +38,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 26
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
