@@ -2,6 +2,17 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.4.3] - 2026-07-20
+
+### Fixed
+
+- 工具列輸出命名 pill 在開啟 App 時未反映已儲存的命名方式，永遠顯示「自動命名」；還原設定後補呼叫 `syncOutPill()` 同步標籤
+
+### Changed
+
+- CI 與 release 建置環境升級至 Node 26
+- Vitest 新增記憶體版 `localStorage` setup（`vitest.setup.ts`），相容 Node 24+ 內建 web storage，避免 native `localStorage` 蓋掉 jsdom 導致測試失敗
+
 ## [2.4.2] - 2026-07-07
 
 ### Fixed
