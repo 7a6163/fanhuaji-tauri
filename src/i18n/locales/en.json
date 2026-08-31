@@ -80,7 +80,7 @@
   "file.convertDone": "Done",
   "file.convertDoneWithWarnings": "Done ({warnings})",
   "file.converting": "Converting\u2026",
-  "file.convertingChapter": "Converting\u2026 ({current}/{total} {name})",
+  "file.convertingChapter": "Converting\u2026 ({current}/{total}{name})",
   "queue.count": "\u00b7 {count} files",
 
   "dom.missingElement": "Required element not found: {selector}",

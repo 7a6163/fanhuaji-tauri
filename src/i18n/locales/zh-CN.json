@@ -80,7 +80,7 @@
   "file.convertDone": "转换完成",
   "file.convertDoneWithWarnings": "转换完成（{warnings}）",
   "file.converting": "转换中…",
-  "file.convertingChapter": "转换中… ({current}/{total} {name})",
+  "file.convertingChapter": "转换中… ({current}/{total}{name})",
   "queue.count": "· {count} 档",
 
   "dom.missingElement": "必要元素不存在：{selector}",
