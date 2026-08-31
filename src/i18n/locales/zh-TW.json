@@ -116,6 +116,8 @@
   "errors.NET_REQUEST_FAILED": "網路請求失敗：{detail}",
   "errors.RESPONSE_PARSE_FAILED": "回應解析失敗：{detail}",
   "errors.API_ERROR": "API 錯誤：{detail}",
+  "errors.HTTP_ERROR": "伺服器回應錯誤：{detail}",
+  "errors.PAYLOAD_TOO_LARGE": "單次請求內容過大",
   "errors.API_NO_DATA": "API 回應缺少 data 欄位",
   "errors.API_INVALID_CONVERTER": "API 回應包含無效的轉換器名稱",
   "errors.SERVICE_INFO_FAILED": "服務資訊請求失敗（code: {detail}）",

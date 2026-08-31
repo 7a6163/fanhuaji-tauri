@@ -116,6 +116,8 @@
   "errors.NET_REQUEST_FAILED": "Network request failed: {detail}",
   "errors.RESPONSE_PARSE_FAILED": "Failed to parse response: {detail}",
   "errors.API_ERROR": "API error: {detail}",
+  "errors.HTTP_ERROR": "Server responded with an error: {detail}",
+  "errors.PAYLOAD_TOO_LARGE": "Request content too large",
   "errors.API_NO_DATA": "API response missing data field",
   "errors.API_INVALID_CONVERTER": "API response contains an invalid converter name",
   "errors.SERVICE_INFO_FAILED": "Service info request failed (code: {detail})",

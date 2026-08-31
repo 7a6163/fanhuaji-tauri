@@ -1,9 +1,10 @@
 use crate::build_service_info;
 use crate::epub;
 use crate::{
-    API_BASE, ApiResponse, ConvertEpubParams, ConvertFileParams, ConvertFileResult, EpubProgress,
-    HttpClient, ServiceInfo, build_api_params, build_output_name, check_file_size, decode_text,
-    resolve_output_dir, validate_api_response,
+    API_BASE, ApiConvertData, ApiResponse, ConvertEpubParams, ConvertFileParams, ConvertFileResult,
+    ConvertOptions, EpubProgress, HttpClient, MAX_CHUNK_BYTES, ServiceInfo, build_api_params,
+    build_output_name, check_file_size, decode_text, resolve_output_dir, split_text,
+    validate_api_response,
 };
 use std::path::Path;
 use tauri::Emitter;
@@ -60,12 +61,104 @@ pub async fn open_files_dialog(app: tauri::AppHandle) -> Result<Vec<String>, Str
     }
 }
 
+/// POST one text chunk to the `/convert` endpoint and return the converted data.
+///
+/// The HTTP status is checked before the body is parsed, so an nginx `413` page
+/// or a `5xx` HTML error surfaces as `PAYLOAD_TOO_LARGE` / `HTTP_ERROR:{status}`
+/// rather than a misleading `RESPONSE_PARSE_FAILED`.
+async fn convert_chunk(
+    client: &reqwest::Client,
+    text: &str,
+    opts: ConvertOptions<'_>,
+) -> Result<ApiConvertData, String> {
+    let params = build_api_params(
+        text,
+        opts.converter,
+        opts.pre_replace,
+        opts.post_replace,
+        opts.protect_replace,
+        opts.modules,
+    );
+
+    let url = format!("{API_BASE}/convert");
+    let resp = client
+        .post(&url)
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| format!("NET_REQUEST_FAILED:{e}"))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        if status == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
+            return Err("PAYLOAD_TOO_LARGE".to_string());
+        }
+        return Err(format!("HTTP_ERROR:{}", status.as_u16()));
+    }
+
+    let api: ApiResponse = resp
+        .json()
+        .await
+        .map_err(|e| format!("RESPONSE_PARSE_FAILED:{e}"))?;
+
+    validate_api_response(api)
+}
+
+/// Convert `content` in newline-aligned chunks, concatenating the results.
+///
+/// Emits an `epub-progress` event per chunk when `file_id` is non-empty so the
+/// UI can show progress on a large single file. Returns the joined converted
+/// text and the converter name reported by the first chunk.
+async fn convert_in_chunks(
+    app: Option<&tauri::AppHandle>,
+    client: &reqwest::Client,
+    file_id: &str,
+    content: &str,
+    opts: ConvertOptions<'_>,
+) -> Result<(String, String), String> {
+    let chunks = split_text(content, MAX_CHUNK_BYTES);
+    let total = chunks.len();
+    let mut output = String::with_capacity(content.len());
+    let mut result_converter = opts.converter.to_string();
+
+    for (i, chunk) in chunks.iter().enumerate() {
+        if let Some(app) = app
+            && !file_id.is_empty()
+        {
+            let _ = app.emit(
+                "epub-progress",
+                EpubProgress {
+                    file_id: file_id.to_string(),
+                    chapter_index: i + 1,
+                    chapter_total: total,
+                    chapter_name: String::new(),
+                },
+            );
+        }
+
+        let data = convert_chunk(client, chunk, opts).await?;
+
+        if i == 0 {
+            result_converter = data.converter;
+        }
+        output.push_str(&data.text);
+
+        if i + 1 < total {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+
+    Ok((output, result_converter))
+}
+
 #[tauri::command]
 pub async fn convert_file(
+    app: tauri::AppHandle,
     client: tauri::State<'_, HttpClient>,
     params: ConvertFileParams,
 ) -> Result<ConvertFileResult, String> {
     let ConvertFileParams {
+        file_id,
         input_path,
         converter,
         save_folder,
@@ -95,38 +188,28 @@ pub async fn convert_file(
         .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
     let (content, _encoding) = decode_text(&raw);
 
-    // Build API params
-    let params = build_api_params(
+    // Convert in newline-aligned chunks (the API's front-end rejects request
+    // bodies over ~1 MiB), streaming progress to the UI for large files.
+    let (converted_text, result_converter) = convert_in_chunks(
+        Some(&app),
+        &client.0,
+        &file_id,
         &content,
-        &converter,
-        &pre_replace,
-        &post_replace,
-        &protect_replace,
-        &modules,
-    );
-
-    // Call API
-    let url = format!("{API_BASE}/convert");
-    let resp = client
-        .0
-        .post(&url)
-        .form(&params)
-        .send()
-        .await
-        .map_err(|e| format!("NET_REQUEST_FAILED:{e}"))?;
-
-    let api: ApiResponse = resp
-        .json()
-        .await
-        .map_err(|e| format!("RESPONSE_PARSE_FAILED:{e}"))?;
-
-    let data = validate_api_response(api)?;
+        ConvertOptions {
+            converter: &converter,
+            pre_replace: &pre_replace,
+            post_replace: &post_replace,
+            protect_replace: &protect_replace,
+            modules: &modules,
+        },
+    )
+    .await?;
 
     // Determine output directory
     let input = Path::new(&input_path);
     let dir = resolve_output_dir(input, &save_folder)?;
 
-    let output_name = build_output_name(input, &naming, &data.converter, &custom_suffix)?;
+    let output_name = build_output_name(input, &naming, &result_converter, &custom_suffix)?;
 
     // Build output path from canonical directory to prevent traversal
     let canonical_dir = tokio::fs::canonicalize(&dir)
@@ -135,7 +218,7 @@ pub async fn convert_file(
     let output_path = canonical_dir.join(&output_name);
 
     // Write output
-    tokio::fs::write(&output_path, &data.text)
+    tokio::fs::write(&output_path, &converted_text)
         .await
         .map_err(|e| format!("FILE_WRITE_FAILED:{e}"))?;
 
@@ -177,34 +260,24 @@ pub async fn preview_convert(
         .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
     let (content, _encoding) = decode_text(&raw);
 
-    let api_params = build_api_params(
-        &content,
-        &params.converter,
-        &params.pre_replace,
-        &params.post_replace,
-        &params.protect_replace,
-        &params.modules,
-    );
-
-    let url = format!("{API_BASE}/convert");
-    let resp = client
-        .0
-        .post(&url)
-        .form(&api_params)
-        .send()
-        .await
-        .map_err(|e| format!("NET_REQUEST_FAILED:{e}"))?;
-
-    let api: ApiResponse = resp
-        .json()
-        .await
-        .map_err(|e| format!("RESPONSE_PARSE_FAILED:{e}"))?;
-
-    let data = validate_api_response(api)?;
-
-    let truncated = content.chars().count() > PREVIEW_CHAR_LIMIT
-        || data.text.chars().count() > PREVIEW_CHAR_LIMIT;
+    // Only the preview window is sent to the API — a large file would be
+    // rejected for body size and the extra text would just be discarded here.
+    let truncated = content.chars().count() > PREVIEW_CHAR_LIMIT;
     let original: String = content.chars().take(PREVIEW_CHAR_LIMIT).collect();
+
+    let data = convert_chunk(
+        &client.0,
+        &original,
+        ConvertOptions {
+            converter: &params.converter,
+            pre_replace: &params.pre_replace,
+            post_replace: &params.post_replace,
+            protect_replace: &params.protect_replace,
+            modules: &params.modules,
+        },
+    )
+    .await?;
+
     let converted: String = data.text.chars().take(PREVIEW_CHAR_LIMIT).collect();
 
     Ok(PreviewResult {
@@ -250,7 +323,6 @@ pub async fn convert_epub(
             .map_err(|e| format!("EPUB_EXTRACT_FAILED:{e}"))??;
 
     let chapter_total = content_files.len();
-    let url = format!("{API_BASE}/convert");
     let mut failed_chapters: usize = 0;
 
     // Convert each chapter
@@ -290,47 +362,32 @@ pub async fn convert_epub(
             continue; // No text to convert
         }
 
-        // Call API
-        let api_params = build_api_params(
+        // Call API — chunked, so a chapter over the request-body limit still
+        // converts instead of being counted as a failure.
+        let converted = match convert_in_chunks(
+            None,
+            &client.0,
+            "",
             &text,
-            &converter,
-            &pre_replace,
-            &post_replace,
-            &protect_replace,
-            &modules,
-        );
-
-        let resp = match client.0.post(&url).form(&api_params).send().await {
-            Ok(r) => r,
+            ConvertOptions {
+                converter: &converter,
+                pre_replace: &pre_replace,
+                post_replace: &post_replace,
+                protect_replace: &protect_replace,
+                modules: &modules,
+            },
+        )
+        .await
+        {
+            Ok((converted, _)) => converted,
             Err(_) => {
-                failed_chapters += 1;
-                continue;
-            }
-        };
-
-        let api: ApiResponse = match resp.json().await {
-            Ok(r) => r,
-            Err(_) => {
-                failed_chapters += 1;
-                continue;
-            }
-        };
-
-        if api.code != 0 {
-            failed_chapters += 1;
-            continue;
-        }
-
-        let data = match api.data {
-            Some(d) => d,
-            None => {
                 failed_chapters += 1;
                 continue;
             }
         };
 
         // Replace text in XHTML
-        let new_xhtml = match epub::replace_text(&xhtml, &data.text) {
+        let new_xhtml = match epub::replace_text(&xhtml, &converted) {
             Ok(r) => r,
             Err(_) => {
                 failed_chapters += 1;

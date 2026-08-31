@@ -116,6 +116,8 @@
   "errors.NET_REQUEST_FAILED": "网络请求失败：{detail}",
   "errors.RESPONSE_PARSE_FAILED": "响应解析失败：{detail}",
   "errors.API_ERROR": "API 错误：{detail}",
+  "errors.HTTP_ERROR": "服务器响应错误：{detail}",
+  "errors.PAYLOAD_TOO_LARGE": "单次请求内容过大",
   "errors.API_NO_DATA": "API 响应缺少 data 字段",
   "errors.API_INVALID_CONVERTER": "API 响应包含无效的转换器名称",
   "errors.SERVICE_INFO_FAILED": "服务信息请求失败（code: {detail}）",

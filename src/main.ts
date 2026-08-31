@@ -485,6 +485,7 @@ async function convertPending() {
       try {
         const fullPath = `${file.inputPath}/${file.inputName}`;
         const commonParams = {
+          fileId: file.id,
           inputPath: fullPath,
           converter,
           saveFolder: saveFolderEl?.value ?? "same",
