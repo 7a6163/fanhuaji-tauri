@@ -142,5 +142,15 @@
   "preview.stats": "{chars} 字 · {changed} 行有變更",
   "preview.truncated": "僅顯示前段",
   "preview.empty": "（空白檔案）",
-  "preview.epubUnsupported": "EPUB 為二進位格式，暫不支援文字預覽"
+  "preview.epubUnsupported": "EPUB 為二進位格式，暫不支援文字預覽",
+
+  "header.converterMode": "轉換模式",
+  "naming.title": "輸出方式",
+  "settings.save.naming.autoDesc": "依命名規則自動產生檔名",
+  "settings.save.naming.suffixDesc": "在原檔名後加標記，不覆蓋",
+  "settings.save.naming.overwriteDesc": "直接寫回，建議先備份",
+  "queue.title": "檔案佇列",
+  "preview.emptyTitle": "選一個檔案來預覽",
+  "preview.emptyHint": "左側點選檔案，即時顯示逐句「原文 → 轉換後」對照",
+  "status.filesUnit": "檔"
 }

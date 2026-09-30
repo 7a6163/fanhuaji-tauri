@@ -12,12 +12,12 @@
         <div class="brand">
           <div class="seal" aria-hidden="true">繁</div>
           <div class="brand-text">
-            <span class="brand-name">繁化姬</span>
+            <span class="brand-name" data-i18n="app.title">繁化姬</span>
             <span class="brand-sub">FANHUAJI</span>
           </div>
         </div>
         <div class="toolbar-controls">
-          <div class="mode-seg" id="mode-seg" role="group" aria-label="轉換模式">
+          <div class="mode-seg" id="mode-seg" role="group" aria-label="轉換模式" data-i18n-aria-label="header.converterMode">
             <button type="button" data-converter="Traditional" data-i18n="converter.Traditional">繁體化</button>
             <button type="button" data-converter="Taiwan" data-i18n="converter.Taiwan">台灣化</button>
             <button type="button" data-converter="Hongkong" data-i18n="converter.Hongkong">香港化</button>
@@ -29,26 +29,26 @@
               <span id="out-pill-label">自訂後綴</span>
               <i class="ti ti-chevron-down out-pill-caret"></i>
             </button>
-            <div id="out-pop" class="out-pop hidden" role="menu" aria-label="輸出方式">
-              <div class="out-pop-group">輸出方式</div>
+            <div id="out-pop" class="out-pop hidden" role="menu" aria-label="輸出方式" data-i18n-aria-label="naming.title">
+              <div class="out-pop-group" data-i18n="naming.title">輸出方式</div>
               <button type="button" class="out-opt" data-naming="auto" role="menuitemradio" aria-checked="false">
                 <div class="oo-body">
                   <div class="oo-title" data-i18n="settings.save.naming.auto">自動命名</div>
-                  <div class="oo-desc">依命名規則自動產生檔名</div>
+                  <div class="oo-desc" data-i18n="settings.save.naming.autoDesc">依命名規則自動產生檔名</div>
                 </div>
                 <i class="ti ti-check oo-check"></i>
               </button>
               <button type="button" class="out-opt" data-naming="suffix" role="menuitemradio" aria-checked="false">
                 <div class="oo-body">
                   <div class="oo-title" data-i18n="settings.save.naming.suffix">自訂後綴</div>
-                  <div class="oo-desc">在原檔名後加標記，不覆蓋</div>
+                  <div class="oo-desc" data-i18n="settings.save.naming.suffixDesc">在原檔名後加標記，不覆蓋</div>
                 </div>
                 <i class="ti ti-check oo-check"></i>
               </button>
               <button type="button" class="out-opt" data-naming="overwrite" role="menuitemradio" aria-checked="false">
                 <div class="oo-body">
                   <div class="oo-title" data-i18n="settings.save.naming.overwrite">覆蓋原檔</div>
-                  <div class="oo-desc">直接寫回，建議先備份</div>
+                  <div class="oo-desc" data-i18n="settings.save.naming.overwriteDesc">直接寫回，建議先備份</div>
                 </div>
                 <i class="ti ti-check oo-check"></i>
               </button>
@@ -65,7 +65,7 @@
         <!-- Left: file queue -->
         <section class="queue-col">
           <div class="queue-head">
-            <span class="qh-title">檔案佇列</span>
+            <span class="qh-title" data-i18n="queue.title">檔案佇列</span>
             <span class="qh-meta" id="queue-meta"></span>
             <span class="qh-spacer"></span>
             <button type="button" id="btn-add-more" class="pane-act">
@@ -86,8 +86,8 @@
         <section class="preview-col">
           <div id="preview-empty" class="preview-empty">
             <div class="pe-icon"><i class="ti ti-file-text"></i></div>
-            <div class="pe-title">選一個檔案來預覽</div>
-            <div class="pe-sub">左側點選檔案，即時顯示逐句「原文 → 轉換後」對照</div>
+            <div class="pe-title" data-i18n="preview.emptyTitle">選一個檔案來預覽</div>
+            <div class="pe-sub" data-i18n="preview.emptyHint">左側點選檔案，即時顯示逐句「原文 → 轉換後」對照</div>
           </div>
           <div id="preview-pane" class="preview-pane-inline hidden">
             <div class="preview-head">
@@ -111,7 +111,7 @@
       <footer id="status-bar" class="status-bar hidden">
         <span class="stat mode"><i class="ti ti-arrows-transfer-up"></i> <span id="status-mode"></span></span>
         <span class="stat-divider"></span>
-        <span class="stat"><span class="n" id="count-total">0</span> 檔</span>
+        <span class="stat"><span class="n" id="count-total">0</span> <span data-i18n="status.filesUnit">檔</span></span>
         <span class="stat ok"><span data-i18n="status.success">完成:</span> <span class="n" id="count-success">0</span></span>
         <span class="stat err"><span data-i18n="status.error">錯誤:</span> <span class="n" id="count-error">0</span></span>
         <span class="status-spacer"></span>
