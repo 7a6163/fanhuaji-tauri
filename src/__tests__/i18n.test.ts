@@ -49,7 +49,7 @@ describe("t", () => {
     const result = t("file.convertingChapter", {
       current: "2",
       total: "10",
-      name: "Chapter 2",
+      name: " Chapter 2",
     });
     expect(result).toBe("轉換中… (2/10 Chapter 2)");
   });

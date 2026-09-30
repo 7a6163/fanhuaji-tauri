@@ -71,6 +71,8 @@ pub(crate) struct ConvertFileResult {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ConvertFileParams {
+    #[serde(default)]
+    pub file_id: String,
     pub input_path: String,
     pub converter: String,
     pub save_folder: String,
@@ -166,6 +168,17 @@ pub(crate) fn build_output_name(
     }
 }
 
+/// Borrowed bundle of the user-tunable conversion options shared by the
+/// file, preview and EPUB conversion paths.
+#[derive(Clone, Copy)]
+pub(crate) struct ConvertOptions<'a> {
+    pub converter: &'a str,
+    pub pre_replace: &'a str,
+    pub post_replace: &'a str,
+    pub protect_replace: &'a str,
+    pub modules: &'a str,
+}
+
 // --- API params builder ---
 
 pub(crate) fn build_api_params<'a>(
@@ -190,6 +203,60 @@ pub(crate) fn build_api_params<'a>(
         params.push(("modules", modules));
     }
     params
+}
+
+// --- Text chunking ---
+
+/// Max source bytes per `/convert` request. The API's nginx front-end rejects
+/// request bodies over 1 MiB; percent-encoding expands UTF-8 CJK bytes 3x, so
+/// the source text has to stay well under 1 MiB / 3.
+pub(crate) const MAX_CHUNK_BYTES: usize = 250 * 1024;
+
+/// Split `text` into consecutive slices each at most `max_bytes` long.
+///
+/// Splits happen at `\n` boundaries where possible (the newline stays with the
+/// preceding chunk, so `chunks.concat()` reproduces the input exactly). A single
+/// line longer than `max_bytes` is broken at a UTF-8 char boundary. Empty input
+/// yields an empty vec.
+pub(crate) fn split_text(text: &str, max_bytes: usize) -> Vec<&str> {
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    let bytes = text.as_bytes();
+
+    while start < text.len() {
+        let remaining = text.len() - start;
+        if remaining <= max_bytes {
+            chunks.push(&text[start..]);
+            break;
+        }
+
+        let window_end = start + max_bytes;
+        // Prefer breaking right after the last newline inside the window.
+        let split = match bytes[start..window_end].iter().rposition(|&b| b == b'\n') {
+            Some(rel) => start + rel + 1,
+            None => {
+                // No newline: fall back to the last char boundary <= window_end.
+                let mut e = window_end;
+                while e > start && !text.is_char_boundary(e) {
+                    e -= 1;
+                }
+                // A single char wider than the window (shouldn't happen for
+                // valid text, but stay safe): take at least one char.
+                if e == start {
+                    e = start + 1;
+                    while e < text.len() && !text.is_char_boundary(e) {
+                        e += 1;
+                    }
+                }
+                e
+            }
+        };
+
+        chunks.push(&text[start..split]);
+        start = split;
+    }
+
+    chunks
 }
 
 // --- Module parsing ---
@@ -502,6 +569,64 @@ mod tests {
     fn api_params_all_options() {
         let params = build_api_params("text", "Simplified", "a=b", "c=d", "protect", r#"{"X":1}"#);
         assert_eq!(params.len(), 6);
+    }
+
+    // --- split_text ---
+
+    #[test]
+    fn split_text_empty_is_empty() {
+        assert!(split_text("", 100).is_empty());
+    }
+
+    #[test]
+    fn split_text_shorter_than_limit_is_single_chunk() {
+        assert_eq!(split_text("hello world", 100), vec!["hello world"]);
+    }
+
+    #[test]
+    fn split_text_breaks_at_newline_boundaries() {
+        let text = "aaaa\nbbbb\ncccc\n";
+        let chunks = split_text(text, 6);
+        assert_eq!(chunks, vec!["aaaa\n", "bbbb\n", "cccc\n"]);
+    }
+
+    #[test]
+    fn split_text_roundtrips() {
+        let text = "第一行內容\n第二行內容\n第三行更長一些的內容\n第四行\n";
+        let chunks = split_text(text, 20);
+        assert_eq!(chunks.concat(), text);
+        for c in &chunks {
+            assert!(c.len() <= 20 || c.chars().count() == 1);
+        }
+    }
+
+    #[test]
+    fn split_text_never_splits_mid_char() {
+        // Each CJK char is 3 bytes; a 7-byte window can't align to 3.
+        let text = "字字字字字字字字";
+        let chunks = split_text(text, 7);
+        assert_eq!(chunks.concat(), text);
+        for c in &chunks {
+            assert!(c.is_char_boundary(0) && c.is_char_boundary(c.len()));
+            assert!(std::str::from_utf8(c.as_bytes()).is_ok());
+        }
+    }
+
+    #[test]
+    fn split_text_oversized_single_line_falls_back_to_char_boundary() {
+        let text = "這是一整行沒有換行符號的長內容需要被切開";
+        let chunks = split_text(text, 9);
+        assert_eq!(chunks.concat(), text);
+        assert!(chunks.len() > 1);
+    }
+
+    #[test]
+    fn split_text_uses_real_chunk_size() {
+        let line = "測試內容\n";
+        let text = line.repeat(1000);
+        let chunks = split_text(&text, MAX_CHUNK_BYTES);
+        assert_eq!(chunks.concat(), text);
+        assert_eq!(chunks.len(), 1);
     }
 
     // --- parse_modules ---

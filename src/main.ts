@@ -149,7 +149,7 @@ function fileMessage(f: FileEntry): string {
           t("file.convertingChapter", {
             current: String(f.chapterIndex),
             total: String(f.chapterTotal),
-            name: f.chapterName ?? "",
+            name: f.chapterName ? ` ${f.chapterName}` : "",
           }),
         )
       : escHtml(t("file.converting"));
@@ -485,6 +485,7 @@ async function convertPending() {
       try {
         const fullPath = `${file.inputPath}/${file.inputName}`;
         const commonParams = {
+          fileId: file.id,
           inputPath: fullPath,
           converter,
           saveFolder: saveFolderEl?.value ?? "same",
