@@ -106,8 +106,9 @@ async fn convert_chunk(
 
 /// Convert `content` in newline-aligned chunks, concatenating the results.
 ///
-/// Emits an `epub-progress` event per chunk when `file_id` is non-empty so the
-/// UI can show progress on a large single file. Returns the joined converted
+/// Emits an `epub-progress` event per chunk when there are 2+ chunks and
+/// `file_id` is non-empty, so the UI
+/// can show progress on a large single file. Returns the joined converted
 /// text and the converter name reported by the first chunk.
 async fn convert_in_chunks(
     app: Option<&tauri::AppHandle>,
@@ -122,7 +123,9 @@ async fn convert_in_chunks(
     let mut result_converter = opts.converter.to_string();
 
     for (i, chunk) in chunks.iter().enumerate() {
+        // Single-chunk files keep the plain "Converting…" label.
         if let Some(app) = app
+            && total > 1
             && !file_id.is_empty()
         {
             let _ = app.emit(
@@ -262,7 +265,7 @@ pub async fn preview_convert(
 
     // Only the preview window is sent to the API — a large file would be
     // rejected for body size and the extra text would just be discarded here.
-    let truncated = content.chars().count() > PREVIEW_CHAR_LIMIT;
+    let input_truncated = content.chars().count() > PREVIEW_CHAR_LIMIT;
     let original: String = content.chars().take(PREVIEW_CHAR_LIMIT).collect();
 
     let data = convert_chunk(
@@ -278,6 +281,8 @@ pub async fn preview_convert(
     )
     .await?;
 
+    // Bopomofo/pinyin output can far exceed its input, so check both sides.
+    let truncated = input_truncated || data.text.chars().count() > PREVIEW_CHAR_LIMIT;
     let converted: String = data.text.chars().take(PREVIEW_CHAR_LIMIT).collect();
 
     Ok(PreviewResult {
