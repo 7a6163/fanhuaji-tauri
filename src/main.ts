@@ -897,7 +897,10 @@ async function initVersion() {
     const version = await getVersion();
     const el = document.getElementById("app-version");
     if (el) el.textContent = version;
-    document.title = `${t("app.title")} ${version}`;
+    const title = `${t("app.title")} ${version}`;
+    document.title = title;
+    // Keep the native title bar in the current UI language too.
+    await getCurrentWebviewWindow().setTitle(title);
   } catch {
     // Version unavailable — title stays as default
   }
