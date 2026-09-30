@@ -168,11 +168,11 @@ describe("initI18n", () => {
     expect(getLocale()).toBe("en");
   });
 
-  it("falls back to zh-TW for unsupported language", () => {
+  it("falls back to en for non-Chinese languages", () => {
     localStorage.clear();
     Object.defineProperty(navigator, "language", { value: "ja", configurable: true });
     initI18n();
-    expect(getLocale()).toBe("zh-TW");
+    expect(getLocale()).toBe("en");
   });
 
   it("detects zh-CN for bare zh", () => {

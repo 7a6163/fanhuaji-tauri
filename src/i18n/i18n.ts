@@ -27,8 +27,8 @@ function detectLocale(): Locale {
     if (lang.includes("CN") || lang.includes("Hans") || lang === "zh") return "zh-CN";
     return "zh-TW";
   }
-  if (lang.startsWith("en")) return "en";
-  return DEFAULT_LOCALE;
+  // Non-Chinese systems get English (AppImage catalog requires an English fallback).
+  return "en";
 }
 
 export function getLocale(): Locale {
