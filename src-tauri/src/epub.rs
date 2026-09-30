@@ -223,12 +223,12 @@ pub fn extract_text_for(kind: ContentKind, xml: &str) -> Result<(String, usize),
         match reader.read_event() {
             Ok(Event::Start(e)) => scope.enter(e.name().as_ref()),
             Ok(Event::End(_)) => scope.leave(),
-            Ok(Event::Text(e)) => {
+            Ok(Event::Text(e)) if scope.active() => {
                 let text = e
                     .unescape()
                     .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?
                     .into_owned();
-                if scope.active() && !text.trim().is_empty() {
+                if !text.trim().is_empty() {
                     texts.push(text);
                 }
             }
@@ -258,11 +258,11 @@ pub fn replace_text_for(kind: ContentKind, xml: &str, converted: &str) -> Result
 
     loop {
         match reader.read_event() {
-            Ok(Event::Text(e)) => {
+            Ok(Event::Text(e)) if scope.active() => {
                 let original = e
                     .unescape()
                     .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?;
-                if scope.active() && !original.trim().is_empty() && seg_idx < segments.len() {
+                if !original.trim().is_empty() && seg_idx < segments.len() {
                     let new_text = BytesText::new(segments[seg_idx]);
                     writer
                         .write_event(Event::Text(new_text))
@@ -728,6 +728,15 @@ mod tests {
             opf.replace("书名", "書名"),
             "only the title text may change"
         );
+    }
+
+    #[test]
+    fn opf_ignores_bad_entity_outside_scope() {
+        let opf = r#"<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:rights>&copy; 2026</dc:rights><dc:title>书名</dc:title></metadata></package>"#;
+        let (text, count) = extract_text_for(ContentKind::Opf, opf).unwrap();
+        assert_eq!((text.as_str(), count), ("书名", 1));
+        let result = replace_text_for(ContentKind::Opf, opf, "書名").unwrap();
+        assert_eq!(result, opf.replace("书名", "書名"));
     }
 
     #[test]
