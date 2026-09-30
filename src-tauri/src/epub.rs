@@ -999,7 +999,7 @@ mod tests {
         let repacked_file = fs::File::open(output.path()).unwrap();
         let mut archive = ZipArchive::new(repacked_file).unwrap();
 
-        assert!(archive.len() > 0, "repacked ZIP must not be empty");
+        assert!(!archive.is_empty(), "repacked ZIP must not be empty");
 
         // Entry at index 0 must be mimetype
         let entry0 = archive.by_index(0).unwrap();
