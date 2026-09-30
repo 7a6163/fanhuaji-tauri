@@ -2,6 +2,18 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.4.5] - 2026-09-30
+
+### Fixed
+
+- AppImage 的 `.DirIcon` 原為指向 CI 建置路徑的絕對符號連結，掛載到其他機器後失效（AppImage 目錄測試回報 `.DirIcon is missing`）；Tauri CLI 升級至 2.12.0 改為相對連結（#22）
+
+### Changed
+
+- 原生視窗標題列跟隨介面語言顯示（英文為 `Fanhuaji`，中文為「繁化姬」），切換語言時同步更新（#24）
+- Linux `.desktop` 檔加上 `Categories=Utility`，原先為空（#24）
+- `README.md` 改為英文，正體中文版移至 `README.zh-TW.md`（#23）
+
 ## [2.4.4] - 2026-09-30
 
 ### Fixed
