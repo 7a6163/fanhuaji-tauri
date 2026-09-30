@@ -182,6 +182,7 @@ body {
   font-size: 16px;
   letter-spacing: 0.5px;
   line-height: 1.15;
+  white-space: nowrap;
 }
 
 .brand-sub {
@@ -191,6 +192,8 @@ body {
   text-transform: uppercase;
   margin-top: 1px;
 }
+/* In English the brand name already reads "Fanhuaji"; drop the duplicate romanization. */
+html[lang="en"] .brand-sub { display: none; }
 
 /* Toolbar: mode segmented control */
 .toolbar-controls { display: flex; align-items: center; gap: 10px; }
@@ -212,6 +215,7 @@ body {
   padding: 5px 13px;
   border-radius: 5px;
   font-weight: 500;
+  white-space: nowrap;
 }
 .mode-seg button:hover { color: var(--text); }
 .mode-seg button[aria-pressed="true"] {
@@ -235,6 +239,7 @@ body {
   font-family: inherit;
   font-size: 12.5px;
   cursor: pointer;
+  white-space: nowrap;
 }
 .out-pill-btn:hover { border-color: var(--border-strong); background: var(--hover); }
 .out-pill-btn .ti-folder { color: var(--text-muted); }

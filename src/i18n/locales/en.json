@@ -36,6 +36,10 @@
   "converter.Pinyin": "To Pinyin",
   "converter.WikiSimplified": "Wiki Simplified",
   "converter.WikiTraditional": "Wiki Traditional",
+  "converter.short.Traditional": "Traditional",
+  "converter.short.Taiwan": "Taiwan",
+  "converter.short.Hongkong": "Hong Kong",
+  "converter.short.Simplified": "Simplified",
 
   "settings.save.title": "Save Options",
   "settings.save.folderLabel": "Save folder",
