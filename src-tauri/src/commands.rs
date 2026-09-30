@@ -355,7 +355,7 @@ pub async fn convert_epub(
         };
 
         // Extract text
-        let (text, count) = match epub::extract_text_for(content_file.kind, &xhtml) {
+        let (text, count) = match epub::extract_text(content_file.kind, &xhtml) {
             Ok(r) => r,
             Err(_) => {
                 failed_chapters += 1;
@@ -392,7 +392,7 @@ pub async fn convert_epub(
         };
 
         // Replace text in XHTML
-        let new_xhtml = match epub::replace_text_for(content_file.kind, &xhtml, &converted) {
+        let new_xhtml = match epub::replace_text(content_file.kind, &xhtml, &converted) {
             Ok(r) => r,
             Err(_) => {
                 failed_chapters += 1;
