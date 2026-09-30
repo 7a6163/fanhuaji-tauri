@@ -26,13 +26,14 @@ pub struct ContentFile {
 }
 
 /// Dublin Core elements in the OPF whose text is human-readable.
+/// Matched by local name, ignoring case, so any prefix (or none) works.
 const OPF_TEXT_ELEMENTS: &[&[u8]] = &[
-    b"dc:title",
-    b"dc:creator",
-    b"dc:contributor",
-    b"dc:description",
-    b"dc:subject",
-    b"dc:publisher",
+    b"title",
+    b"creator",
+    b"contributor",
+    b"description",
+    b"subject",
+    b"publisher",
 ];
 
 /// Delimiter used to separate text nodes for batch API conversion.
@@ -186,7 +187,10 @@ impl TextScope {
     fn enter(&mut self, name: &[u8]) {
         if self.depth > 0 {
             self.depth += 1;
-        } else if self.elements.is_some_and(|els| els.contains(&name)) {
+        } else if self
+            .elements
+            .is_some_and(|els| els.iter().any(|el| el.eq_ignore_ascii_case(name)))
+        {
             self.depth = 1;
         }
     }
@@ -221,7 +225,7 @@ pub fn extract_text_for(kind: ContentKind, xml: &str) -> Result<(String, usize),
 
     loop {
         match reader.read_event() {
-            Ok(Event::Start(e)) => scope.enter(e.name().as_ref()),
+            Ok(Event::Start(e)) => scope.enter(e.local_name().as_ref()),
             Ok(Event::End(_)) => scope.leave(),
             Ok(Event::Text(e)) if scope.active() => {
                 let text = e
@@ -277,7 +281,7 @@ pub fn replace_text_for(kind: ContentKind, xml: &str, converted: &str) -> Result
             Ok(Event::Eof) => break,
             Ok(e) => {
                 match &e {
-                    Event::Start(s) => scope.enter(s.name().as_ref()),
+                    Event::Start(s) => scope.enter(s.local_name().as_ref()),
                     Event::End(_) => scope.leave(),
                     _ => {}
                 }
@@ -737,6 +741,17 @@ mod tests {
         assert_eq!((text.as_str(), count), ("书名", 1));
         let result = replace_text_for(ContentKind::Opf, opf, "書名").unwrap();
         assert_eq!(result, opf.replace("书名", "書名"));
+    }
+
+    #[test]
+    fn opf_matches_any_dc_prefix_and_case() {
+        let opf = r#"<package><metadata xmlns:dcterms="http://purl.org/dc/elements/1.1/"><dcterms:title>一</dcterms:title><title xmlns="http://purl.org/dc/elements/1.1/">二</title><dc:Title>三</dc:Title></metadata></package>"#;
+        let (text, count) = extract_text_for(ContentKind::Opf, opf).unwrap();
+        assert_eq!(count, 3);
+        assert_eq!(
+            text.split(TEXT_DELIMITER).collect::<Vec<_>>(),
+            vec!["一", "二", "三"]
+        );
     }
 
     #[test]
