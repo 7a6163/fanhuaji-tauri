@@ -207,6 +207,13 @@ describe("translatePage", () => {
     expect(document.querySelector("button")?.title).toBe("Settings");
   });
 
+  it("translates data-i18n-aria-label attribute", () => {
+    document.body.innerHTML = '<div data-i18n-aria-label="header.converterMode"></div>';
+    setLocale("en");
+    translatePage();
+    expect(document.querySelector("div")?.getAttribute("aria-label")).toBe("Conversion mode");
+  });
+
   it("translates data-i18n-placeholder attribute", () => {
     document.body.innerHTML =
       '<textarea data-i18n-placeholder="settings.replace.pairPlaceholder"></textarea>';

@@ -142,5 +142,15 @@
   "preview.stats": "{chars} 字 · {changed} 行有变更",
   "preview.truncated": "仅显示前段",
   "preview.empty": "（空白文件）",
-  "preview.epubUnsupported": "EPUB 为二进制格式，暂不支持文字预览"
+  "preview.epubUnsupported": "EPUB 为二进制格式，暂不支持文字预览",
+
+  "header.converterMode": "转换模式",
+  "naming.title": "输出方式",
+  "settings.save.naming.autoDesc": "依命名规则自动生成文件名",
+  "settings.save.naming.suffixDesc": "在原文件名后加标记，不覆盖",
+  "settings.save.naming.overwriteDesc": "直接写回，建议先备份",
+  "queue.title": "文件队列",
+  "preview.emptyTitle": "选择一个文件来预览",
+  "preview.emptyHint": "在左侧点选文件，即时显示逐句「原文 → 转换后」对照",
+  "status.filesUnit": "档"
 }

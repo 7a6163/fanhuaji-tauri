@@ -62,6 +62,10 @@ export function translatePage(): void {
   document.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((el) => {
     el.title = t(el.dataset.i18nTitle ?? "");
   });
+  // aria-label attribute
+  document.querySelectorAll<HTMLElement>("[data-i18n-aria-label]").forEach((el) => {
+    el.setAttribute("aria-label", t(el.dataset.i18nAriaLabel ?? ""));
+  });
   // placeholder attribute
   document.querySelectorAll<HTMLElement>("[data-i18n-placeholder]").forEach((el) => {
     (el as HTMLInputElement | HTMLTextAreaElement).placeholder = t(
