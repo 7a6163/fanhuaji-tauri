@@ -36,6 +36,10 @@
   "converter.Pinyin": "拼音化",
   "converter.WikiSimplified": "維基簡體化",
   "converter.WikiTraditional": "維基繁體化",
+  "converter.short.Traditional": "繁體化",
+  "converter.short.Taiwan": "台灣化",
+  "converter.short.Hongkong": "香港化",
+  "converter.short.Simplified": "簡體化",
 
   "settings.save.title": "存檔選項",
   "settings.save.folderLabel": "存檔資料夾",
