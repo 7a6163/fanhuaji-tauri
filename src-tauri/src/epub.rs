@@ -7,11 +7,34 @@ use tempfile::TempDir;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-/// A content file found in the EPUB's OPF manifest.
+/// What kind of XML a content file holds; decides which text nodes are converted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContentKind {
+    /// Chapter or nav document: every text node is converted.
+    Xhtml,
+    /// Package document: only descriptive `dc:*` metadata is converted.
+    Opf,
+    /// NCX table of contents: every text node is converted.
+    Ncx,
+}
+
+/// A convertible file found in the extracted EPUB.
 #[derive(Debug)]
 pub struct ContentFile {
     pub relative_path: String,
+    pub kind: ContentKind,
 }
+
+/// Dublin Core elements in the OPF whose text is human-readable.
+/// Matched by local name, ignoring case, so any prefix (or none) works.
+const OPF_TEXT_ELEMENTS: &[&[u8]] = &[
+    b"title",
+    b"creator",
+    b"contributor",
+    b"description",
+    b"subject",
+    b"publisher",
+];
 
 /// Delimiter used to separate text nodes for batch API conversion.
 const TEXT_DELIMITER: &str = "\x00\x01\x00";
@@ -106,7 +129,7 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
     Ok((temp_dir, content_files))
 }
 
-/// Recursively find all .xhtml and .html files in the extracted EPUB.
+/// Recursively find all convertible files (.xhtml/.html/.htm, .opf, .ncx) in the extracted EPUB.
 fn find_content_files(dir: &Path) -> Result<Vec<ContentFile>, String> {
     let mut files = Vec::new();
     find_content_files_recursive(dir, dir, &mut files)?;
@@ -127,7 +150,13 @@ fn find_content_files_recursive(
             find_content_files_recursive(root, &path, files)?;
         } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let ext_lower = ext.to_lowercase();
-            if ext_lower == "xhtml" || ext_lower == "html" || ext_lower == "htm" {
+            let kind = match ext_lower.as_str() {
+                "xhtml" | "html" | "htm" => Some(ContentKind::Xhtml),
+                "opf" => Some(ContentKind::Opf),
+                "ncx" => Some(ContentKind::Ncx),
+                _ => None,
+            };
+            if let Some(kind) = kind {
                 let relative = path
                     .strip_prefix(root)
                     .map_err(|e| format!("PATH_STRIP_FAILED:{e}"))?
@@ -135,6 +164,7 @@ fn find_content_files_recursive(
                     .into_owned();
                 files.push(ContentFile {
                     relative_path: relative,
+                    kind,
                 });
             }
         }
@@ -142,15 +172,57 @@ fn find_content_files_recursive(
     Ok(())
 }
 
-/// Extract all text content from XHTML, joining with a delimiter.
+/// Tracks whether the reader is inside an element whose text should be
+/// converted. With no element list every text node qualifies.
+struct TextScope {
+    elements: Option<&'static [&'static [u8]]>,
+    depth: usize,
+}
+
+impl TextScope {
+    fn new(elements: Option<&'static [&'static [u8]]>) -> Self {
+        Self { elements, depth: 0 }
+    }
+
+    fn enter(&mut self, name: &[u8]) {
+        if self.depth > 0 {
+            self.depth += 1;
+        } else if self
+            .elements
+            .is_some_and(|els| els.iter().any(|el| el.eq_ignore_ascii_case(name)))
+        {
+            self.depth = 1;
+        }
+    }
+
+    fn leave(&mut self) {
+        self.depth = self.depth.saturating_sub(1);
+    }
+
+    fn active(&self) -> bool {
+        self.elements.is_none() || self.depth > 0
+    }
+}
+
+fn scope_for(kind: ContentKind) -> TextScope {
+    match kind {
+        ContentKind::Opf => TextScope::new(Some(OPF_TEXT_ELEMENTS)),
+        ContentKind::Xhtml | ContentKind::Ncx => TextScope::new(None),
+    }
+}
+
+/// Extract the text nodes relevant for `kind`, joining with a delimiter.
 /// Returns the concatenated text and the count of text segments.
-pub fn extract_text(xhtml: &str) -> Result<(String, usize), String> {
-    let mut reader = Reader::from_str(xhtml);
+pub fn extract_text(kind: ContentKind, xml: &str) -> Result<(String, usize), String> {
+    let mut reader = Reader::from_str(xml);
+    let mut scope = scope_for(kind);
     let mut texts = Vec::new();
 
     loop {
         match reader.read_event() {
-            Ok(Event::Text(e)) => {
+            Ok(Event::Start(e)) => scope.enter(e.local_name().as_ref()),
+            Ok(Event::End(_)) => scope.leave(),
+            Ok(Event::Text(e)) if scope.active() => {
                 let text = e
                     .unescape()
                     .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?
@@ -169,17 +241,19 @@ pub fn extract_text(xhtml: &str) -> Result<(String, usize), String> {
     Ok((texts.join(TEXT_DELIMITER), count))
 }
 
-/// Replace text nodes in XHTML with converted text (split by delimiter).
-pub fn replace_text(xhtml: &str, converted: &str) -> Result<String, String> {
+/// Replace the text nodes `extract_text` yields with converted text
+/// (split by delimiter).
+pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<String, String> {
     let segments: Vec<&str> = converted.split(TEXT_DELIMITER).collect();
     let mut seg_idx = 0;
 
-    let mut reader = Reader::from_str(xhtml);
+    let mut reader = Reader::from_str(xml);
+    let mut scope = scope_for(kind);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
 
     loop {
         match reader.read_event() {
-            Ok(Event::Text(e)) => {
+            Ok(Event::Text(e)) if scope.active() => {
                 let original = e
                     .unescape()
                     .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?;
@@ -197,6 +271,11 @@ pub fn replace_text(xhtml: &str, converted: &str) -> Result<String, String> {
             }
             Ok(Event::Eof) => break,
             Ok(e) => {
+                match &e {
+                    Event::Start(s) => scope.enter(s.local_name().as_ref()),
+                    Event::End(_) => scope.leave(),
+                    _ => {}
+                }
                 writer
                     .write_event(e)
                     .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
@@ -325,7 +404,7 @@ mod tests {
         zip.write_all(
             br#"<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
-  <metadata/>
+  <metadata><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">Book Title</dc:title></metadata>
   <manifest>
     <item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
@@ -370,7 +449,7 @@ mod tests {
     #[test]
     fn extract_text_basic() {
         let xhtml = r#"<html><body><p>你好</p><p>世界</p></body></html>"#;
-        let (text, count) = extract_text(xhtml).unwrap();
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
         assert_eq!(count, 2);
         assert!(text.contains("你好"));
         assert!(text.contains("世界"));
@@ -380,7 +459,7 @@ mod tests {
     #[test]
     fn extract_text_preserves_whitespace_only_skips() {
         let xhtml = r#"<html><body><p>文字</p>  <p>內容</p></body></html>"#;
-        let (text, count) = extract_text(xhtml).unwrap();
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
         assert_eq!(count, 2);
         assert!(!text.starts_with(TEXT_DELIMITER));
     }
@@ -388,7 +467,7 @@ mod tests {
     #[test]
     fn extract_text_empty_body() {
         let xhtml = r#"<html><body></body></html>"#;
-        let (text, count) = extract_text(xhtml).unwrap();
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
         assert_eq!(count, 0);
         assert!(text.is_empty());
     }
@@ -400,7 +479,7 @@ mod tests {
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
   <body><p>繁體中文</p></body>
 </html>"#;
-        let (text, count) = extract_text(xhtml).unwrap();
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
         assert_eq!(count, 1);
         assert_eq!(text, "繁體中文");
     }
@@ -410,7 +489,7 @@ mod tests {
         // Text nodes split by inline elements (<em>, <strong>) should each be
         // extracted as separate segments.
         let xhtml = r#"<html><body><p>前面<em>強調</em>後面</p></body></html>"#;
-        let (text, count) = extract_text(xhtml).unwrap();
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
         assert_eq!(count, 3);
         let parts: Vec<&str> = text.split(TEXT_DELIMITER).collect();
         assert_eq!(parts, vec!["前面", "強調", "後面"]);
@@ -420,7 +499,7 @@ mod tests {
     fn extract_text_only_whitespace_nodes_skipped() {
         // Newlines and spaces between tags should not produce segments.
         let xhtml = "<html>\n  <body>\n    <p>唯一文字</p>\n  </body>\n</html>";
-        let (text, count) = extract_text(xhtml).unwrap();
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
         assert_eq!(count, 1);
         assert_eq!(text, "唯一文字");
     }
@@ -429,7 +508,7 @@ mod tests {
     fn extract_text_malformed_xml_returns_parse_error() {
         // Unclosed attribute quote forces quick-xml to emit an Err event.
         let xhtml = r#"<html><body><p attr="unclosed><</p></body></html>"#;
-        let result = extract_text(xhtml);
+        let result = extract_text(ContentKind::Xhtml, xhtml);
         assert!(result.is_err(), "malformed XML must produce an error");
         let msg = result.unwrap_err();
         assert!(
@@ -441,7 +520,7 @@ mod tests {
     #[test]
     fn replace_text_malformed_xml_returns_parse_error() {
         let xhtml = r#"<html><body><p attr="unclosed><</p></body></html>"#;
-        let result = replace_text(xhtml, "replacement");
+        let result = replace_text(ContentKind::Xhtml, xhtml, "replacement");
         assert!(result.is_err(), "malformed XML must produce an error");
         let msg = result.unwrap_err();
         assert!(
@@ -453,7 +532,7 @@ mod tests {
     #[test]
     fn extract_text_single_segment_no_delimiter() {
         let xhtml = r#"<html><body><p>孤獨段落</p></body></html>"#;
-        let (text, count) = extract_text(xhtml).unwrap();
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
         assert_eq!(count, 1);
         assert!(!text.contains(TEXT_DELIMITER));
         assert_eq!(text, "孤獨段落");
@@ -467,7 +546,7 @@ mod tests {
     fn replace_text_basic() {
         let xhtml = r#"<html><body><p>你好</p><p>世界</p></body></html>"#;
         let converted = format!("Hello{TEXT_DELIMITER}World");
-        let result = replace_text(xhtml, &converted).unwrap();
+        let result = replace_text(ContentKind::Xhtml, xhtml, &converted).unwrap();
         assert!(result.contains("Hello"));
         assert!(result.contains("World"));
         assert!(!result.contains("你好"));
@@ -476,7 +555,7 @@ mod tests {
     #[test]
     fn replace_text_preserves_tags() {
         let xhtml = r#"<html><body><div class="test"><p>文字</p></div></body></html>"#;
-        let result = replace_text(xhtml, "text").unwrap();
+        let result = replace_text(ContentKind::Xhtml, xhtml, "text").unwrap();
         assert!(result.contains(r#"class="test""#));
         assert!(result.contains("text"));
     }
@@ -485,7 +564,7 @@ mod tests {
     fn replace_text_nested_tags() {
         // Replacement must leave all wrapper elements intact.
         let xhtml = r#"<html><body><div><section><p>深層文字</p></section></div></body></html>"#;
-        let result = replace_text(xhtml, "Deep text").unwrap();
+        let result = replace_text(ContentKind::Xhtml, xhtml, "Deep text").unwrap();
         assert!(result.contains("<div>"));
         assert!(result.contains("<section>"));
         assert!(result.contains("<p>"));
@@ -498,7 +577,7 @@ mod tests {
         // Self-closing / void elements like <br/> and <img/> must survive unchanged.
         let xhtml = r#"<html><body><p>行一<br/>行二</p><img src="cover.jpg"/></body></html>"#;
         let converted = format!("Line one{TEXT_DELIMITER}Line two");
-        let result = replace_text(xhtml, &converted).unwrap();
+        let result = replace_text(ContentKind::Xhtml, xhtml, &converted).unwrap();
         assert!(result.contains("Line one"));
         assert!(result.contains("Line two"));
         // The self-closing elements should still be present in some form.
@@ -512,10 +591,10 @@ mod tests {
         // Entities like &amp; and &lt; in the original must round-trip correctly.
         let xhtml = r#"<html><body><p>a &amp; b &lt; c</p></body></html>"#;
         // extract_text unescapes, so the single segment is "a & b < c"
-        let (extracted, count) = extract_text(xhtml).unwrap();
+        let (extracted, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
         assert_eq!(count, 1);
         // Replace with same content — result should still be valid XML with entities re-escaped.
-        let result = replace_text(xhtml, &extracted).unwrap();
+        let result = replace_text(ContentKind::Xhtml, xhtml, &extracted).unwrap();
         // quick-xml re-encodes '&' and '<' in text nodes
         assert!(result.contains("&amp;") || result.contains("& b"));
         // The tag structure must remain valid
@@ -527,7 +606,7 @@ mod tests {
     fn replace_text_whitespace_only_nodes_pass_through() {
         // Whitespace-only text nodes must not consume a converted segment.
         let xhtml = "<html>\n<body>\n<p>文字</p>\n</body>\n</html>";
-        let result = replace_text(xhtml, "replacement").unwrap();
+        let result = replace_text(ContentKind::Xhtml, xhtml, "replacement").unwrap();
         assert!(result.contains("replacement"));
         // Surrounding whitespace nodes should still be present
         assert!(result.contains('\n'));
@@ -539,7 +618,7 @@ mod tests {
         // and non-whitespace nodes are left as-is (seg_idx stays 0, segments
         // is [""] which has length 1, so the first real text node gets "").
         let xhtml = r#"<html><body><p>原文</p></body></html>"#;
-        let result = replace_text(xhtml, "").unwrap();
+        let result = replace_text(ContentKind::Xhtml, xhtml, "").unwrap();
         // Should produce valid XML without panicking
         assert!(result.contains("<p>"));
         assert!(result.contains("</p>"));
@@ -548,8 +627,8 @@ mod tests {
     #[test]
     fn roundtrip_extract_replace() {
         let xhtml = r#"<html><body><h1>標題</h1><p>段落一</p><p>段落二</p></body></html>"#;
-        let (text, _) = extract_text(xhtml).unwrap();
-        let result = replace_text(xhtml, &text).unwrap();
+        let (text, _) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
+        let result = replace_text(ContentKind::Xhtml, xhtml, &text).unwrap();
         assert!(result.contains("標題"));
         assert!(result.contains("段落一"));
         assert!(result.contains("段落二"));
@@ -574,13 +653,14 @@ mod tests {
         fs::write(root.join("OEBPS/Text/intro.htm"), b"<html/>").unwrap();
         fs::write(root.join("OEBPS/Images/cover.jpg"), b"JFIF").unwrap();
         fs::write(root.join("OEBPS/content.opf"), b"<opf/>").unwrap();
+        fs::write(root.join("OEBPS/toc.ncx"), b"<ncx/>").unwrap();
         fs::write(root.join("mimetype"), b"application/epub+zip").unwrap();
 
         let files = find_content_files(root).unwrap();
         let names: Vec<&str> = files.iter().map(|f| f.relative_path.as_str()).collect();
 
-        // Only .xhtml, .XHTML, .html, .htm should appear
-        assert_eq!(files.len(), 4, "expected 4 content files, got: {names:?}");
+        // .xhtml, .XHTML, .html, .htm plus the .opf and .ncx metadata files
+        assert_eq!(files.len(), 6, "expected 6 content files, got: {names:?}");
 
         // Results must be sorted
         let mut sorted = names.clone();
@@ -590,10 +670,91 @@ mod tests {
         // Non-content files must be absent
         for name in &names {
             assert!(
-                !name.ends_with(".jpg") && !name.ends_with(".opf") && *name != "mimetype",
+                !name.ends_with(".jpg") && *name != "mimetype",
                 "unexpected file in results: {name}"
             );
         }
+    }
+
+    #[test]
+    fn find_content_files_tags_kinds() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("a.xhtml"), b"<html/>").unwrap();
+        fs::write(dir.path().join("b.opf"), b"<package/>").unwrap();
+        fs::write(dir.path().join("c.NCX"), b"<ncx/>").unwrap();
+        let kinds: Vec<ContentKind> = find_content_files(dir.path())
+            .unwrap()
+            .iter()
+            .map(|f| f.kind)
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![ContentKind::Xhtml, ContentKind::Opf, ContentKind::Ncx]
+        );
+    }
+
+    #[test]
+    fn opf_converts_only_descriptive_metadata() {
+        let opf = r#"<package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <metadata>
+    <dc:identifier id="id">abc-123</dc:identifier>
+    <dc:title>测试书名</dc:title>
+    <dc:creator opf:role="aut">测试作者</dc:creator>
+    <dc:description>简介：<b>示例</b>内容</dc:description>
+    <dc:language>zh</dc:language>
+    <dc:date>2026-08-09</dc:date>
+  </metadata>
+  <manifest><item id="c1" href="a.xhtml"/></manifest>
+</package>"#;
+        let (text, count) = extract_text(ContentKind::Opf, opf).unwrap();
+        assert_eq!(count, 5);
+        assert_eq!(
+            text.split(TEXT_DELIMITER).collect::<Vec<_>>(),
+            vec!["测试书名", "测试作者", "简介：", "示例", "内容"]
+        );
+    }
+
+    #[test]
+    fn opf_replace_leaves_identifiers_untouched() {
+        let opf = r#"<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:identifier>abc-123</dc:identifier><dc:title>书名</dc:title><dc:language>zh</dc:language></metadata></package>"#;
+        let result = replace_text(ContentKind::Opf, opf, "書名").unwrap();
+        assert_eq!(
+            result,
+            opf.replace("书名", "書名"),
+            "only the title text may change"
+        );
+    }
+
+    #[test]
+    fn opf_ignores_bad_entity_outside_scope() {
+        let opf = r#"<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:rights>&copy; 2026</dc:rights><dc:title>书名</dc:title></metadata></package>"#;
+        let (text, count) = extract_text(ContentKind::Opf, opf).unwrap();
+        assert_eq!((text.as_str(), count), ("书名", 1));
+        let result = replace_text(ContentKind::Opf, opf, "書名").unwrap();
+        assert_eq!(result, opf.replace("书名", "書名"));
+    }
+
+    #[test]
+    fn opf_matches_any_dc_prefix_and_case() {
+        let opf = r#"<package><metadata xmlns:dcterms="http://purl.org/dc/elements/1.1/"><dcterms:title>一</dcterms:title><title xmlns="http://purl.org/dc/elements/1.1/">二</title><dc:Title>三</dc:Title></metadata></package>"#;
+        let (text, count) = extract_text(ContentKind::Opf, opf).unwrap();
+        assert_eq!(count, 3);
+        assert_eq!(
+            text.split(TEXT_DELIMITER).collect::<Vec<_>>(),
+            vec!["一", "二", "三"]
+        );
+    }
+
+    #[test]
+    fn ncx_replaces_nav_labels() {
+        let ncx = r#"<ncx><docTitle><text>测试书名</text></docTitle><navMap><navPoint><navLabel><text>第1章 测试</text></navLabel><content src="a.html"/></navPoint></navMap></ncx>"#;
+        let (text, count) = extract_text(ContentKind::Ncx, ncx).unwrap();
+        assert_eq!(count, 2);
+        let converted = text.replace("测试书名", "測試書名").replace("测试", "測試");
+        let result = replace_text(ContentKind::Ncx, ncx, &converted).unwrap();
+        assert!(result.contains("<text>測試書名</text>"));
+        assert!(result.contains("<text>第1章 測試</text>"));
+        assert!(result.contains(r#"src="a.html""#));
     }
 
     #[test]
@@ -627,9 +788,14 @@ mod tests {
         assert!(dir.path().join("mimetype").exists());
         // chapter1.xhtml must have been extracted under OEBPS/
         assert!(dir.path().join("OEBPS/chapter1.xhtml").exists());
-        // The content file list must contain chapter1.xhtml
-        assert_eq!(content_files.len(), 1);
-        assert!(content_files[0].relative_path.contains("chapter1.xhtml"));
+        // The content file list must contain chapter1.xhtml and the OPF
+        let chapters: Vec<_> = content_files
+            .iter()
+            .filter(|f| f.kind == ContentKind::Xhtml)
+            .collect();
+        assert_eq!(chapters.len(), 1);
+        assert!(chapters[0].relative_path.contains("chapter1.xhtml"));
+        assert!(content_files.iter().any(|f| f.kind == ContentKind::Opf));
     }
 
     #[test]
@@ -642,9 +808,13 @@ mod tests {
 
         let (_dir, content_files) = extract_epub(tmp.path()).unwrap();
 
-        assert_eq!(content_files.len(), 2);
+        let chapters: Vec<_> = content_files
+            .iter()
+            .filter(|f| f.kind == ContentKind::Xhtml)
+            .collect();
+        assert_eq!(chapters.len(), 2);
         // Must be sorted: chapter1 before chapter2
-        assert!(content_files[0].relative_path < content_files[1].relative_path);
+        assert!(chapters[0].relative_path < chapters[1].relative_path);
     }
 
     #[test]
@@ -829,7 +999,7 @@ mod tests {
         let repacked_file = fs::File::open(output.path()).unwrap();
         let mut archive = ZipArchive::new(repacked_file).unwrap();
 
-        assert!(archive.len() > 0, "repacked ZIP must not be empty");
+        assert!(!archive.is_empty(), "repacked ZIP must not be empty");
 
         // Entry at index 0 must be mimetype
         let entry0 = archive.by_index(0).unwrap();
