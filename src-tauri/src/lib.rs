@@ -353,23 +353,91 @@ pub(crate) fn check_file_size(len: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// How a text file was stored on disk, so the output can be written back the same way.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct TextEncoding {
+    encoding: &'static encoding_rs::Encoding,
+    bom: bool,
+}
+
 /// Decode raw file bytes into a UTF-8 `String`, detecting the source encoding.
 ///
 /// A leading BOM (UTF-8 / UTF-16) is honoured first; otherwise the charset is
 /// guessed with `chardetng` (the detector Firefox uses), covering common
 /// subtitle encodings such as Big5, GBK/GB18030, Shift_JIS and EUC. Returns the
-/// decoded text along with the detected encoding's canonical name.
-pub(crate) fn decode_text(bytes: &[u8]) -> (String, &'static str) {
-    if let Some((enc, _)) = encoding_rs::Encoding::for_bom(bytes) {
-        let (text, _, _) = enc.decode(bytes);
-        return (text.into_owned(), enc.name());
+/// decoded text along with how it was stored. Text containing NUL is rejected
+/// as `NOT_TEXT_FILE`: it is a binary file (e.g. a `.sup` subtitle or a video).
+pub(crate) fn decode_text(bytes: &[u8]) -> Result<(String, TextEncoding), String> {
+    let (encoding, bom) = match encoding_rs::Encoding::for_bom(bytes) {
+        Some((enc, _)) => (enc, true),
+        None => {
+            let mut detector = chardetng::EncodingDetector::new();
+            detector.feed(bytes, true);
+            (detector.guess(None, true), false)
+        }
+    };
+    let (text, _, _) = encoding.decode(bytes);
+    if text.contains('\0') {
+        return Err("NOT_TEXT_FILE".to_string());
+    }
+    Ok((text.into_owned(), TextEncoding { encoding, bom }))
+}
+
+/// Encode converted text the way the source file was stored: same encoding,
+/// with a BOM only if it had one. Falls back to UTF-8 with a BOM when the text
+/// no longer fits a legacy encoding (e.g. simplified output into Big5), so no
+/// characters are lost and players still detect the encoding.
+pub(crate) fn encode_text(text: &str, source: TextEncoding) -> Vec<u8> {
+    use encoding_rs::{UTF_8, UTF_16BE, UTF_16LE};
+
+    let enc = source.encoding;
+    // encoding_rs can decode UTF-16 but not encode it.
+    if enc == UTF_16LE || enc == UTF_16BE {
+        let mut out = Vec::with_capacity(2 + text.len() * 2);
+        for unit in std::iter::once(0xFEFF).chain(text.encode_utf16()) {
+            let bytes = if enc == UTF_16LE {
+                unit.to_le_bytes()
+            } else {
+                unit.to_be_bytes()
+            };
+            out.extend_from_slice(&bytes);
+        }
+        return out;
+    }
+    if enc != UTF_8 {
+        let (bytes, _, had_errors) = enc.encode(text);
+        if !had_errors {
+            return bytes.into_owned();
+        }
     }
 
-    let mut detector = chardetng::EncodingDetector::new();
-    detector.feed(bytes, true);
-    let enc = detector.guess(None, true);
-    let (text, _, _) = enc.decode(bytes);
-    (text.into_owned(), enc.name())
+    let mut out = Vec::with_capacity(3 + text.len());
+    if source.bom || enc != UTF_8 {
+        out.extend_from_slice(b"\xEF\xBB\xBF");
+    }
+    out.extend_from_slice(text.as_bytes());
+    out
+}
+
+/// Write a file via a temp file in the same directory and a rename, so a
+/// failure midway never leaves `path` truncated. This matters in overwrite
+/// mode, where `path` is the input file. An existing file's permissions are kept.
+pub(crate) fn write_atomic(
+    path: &Path,
+    write: impl FnOnce(&mut std::fs::File) -> Result<(), String>,
+) -> Result<(), String> {
+    let dir = path.parent().ok_or("NO_PARENT_DIR")?;
+    let mut tmp =
+        tempfile::NamedTempFile::new_in(dir).map_err(|e| format!("OUTPUT_CREATE_FAILED:{e}"))?;
+    if let Ok(meta) = std::fs::metadata(path) {
+        tmp.as_file()
+            .set_permissions(meta.permissions())
+            .map_err(|e| format!("FILE_WRITE_FAILED:{e}"))?;
+    }
+    write(tmp.as_file_mut())?;
+    tmp.persist(path)
+        .map_err(|e| format!("FILE_WRITE_FAILED:{}", e.error))?;
+    Ok(())
 }
 
 pub(crate) fn build_service_info(info: ServiceInfoResponse) -> Result<ServiceInfo, String> {
@@ -436,7 +504,7 @@ mod tests {
 
     #[test]
     fn decode_plain_utf8() {
-        let (text, _) = decode_text("繁化姬".as_bytes());
+        let (text, _) = decode_text("繁化姬".as_bytes()).unwrap();
         assert_eq!(text, "繁化姬");
     }
 
@@ -444,7 +512,7 @@ mod tests {
     fn decode_utf8_with_bom() {
         let mut bytes = vec![0xEF, 0xBB, 0xBF];
         bytes.extend_from_slice("字幕".as_bytes());
-        let (text, _) = decode_text(&bytes);
+        let (text, _) = decode_text(&bytes).unwrap();
         assert_eq!(text, "字幕");
     }
 
@@ -454,7 +522,7 @@ mod tests {
         for unit in "字幕".encode_utf16() {
             bytes.extend_from_slice(&unit.to_le_bytes());
         }
-        let (text, _) = decode_text(&bytes);
+        let (text, _) = decode_text(&bytes).unwrap();
         assert_eq!(text, "字幕");
     }
 
@@ -462,7 +530,7 @@ mod tests {
     fn decode_big5() {
         let (bytes, _, had_errors) = encoding_rs::BIG5.encode("台灣繁體字幕測試內容夠長以利偵測");
         assert!(!had_errors);
-        let (text, _) = decode_text(&bytes);
+        let (text, _) = decode_text(&bytes).unwrap();
         assert_eq!(text, "台灣繁體字幕測試內容夠長以利偵測");
     }
 
@@ -470,13 +538,136 @@ mod tests {
     fn decode_gbk() {
         let (bytes, _, had_errors) = encoding_rs::GBK.encode("简体中文字幕测试内容够长以利侦测");
         assert!(!had_errors);
-        let (text, _) = decode_text(&bytes);
+        let (text, _) = decode_text(&bytes).unwrap();
         assert_eq!(text, "简体中文字幕测试内容够长以利侦测");
     }
 
     #[test]
+    fn decode_rejects_binary() {
+        let bytes = b"\x50\x47\x00\x00\x01\x2c\x00\x00";
+        assert_eq!(decode_text(bytes), Err("NOT_TEXT_FILE".to_string()));
+    }
+
+    #[test]
+    fn decode_utf16_with_bom_is_text() {
+        // UTF-16 is full of NUL bytes but decodes to text without NUL.
+        let bytes = encode_text(
+            "ab",
+            TextEncoding {
+                encoding: encoding_rs::UTF_16LE,
+                bom: true,
+            },
+        );
+        assert_eq!(decode_text(&bytes).unwrap().0, "ab");
+    }
+
+    // --- encode_text ---
+
+    fn round_trip(bytes: &[u8], converted: &str) -> Vec<u8> {
+        let (_, source) = decode_text(bytes).unwrap();
+        encode_text(converted, source)
+    }
+
+    #[test]
+    fn encode_keeps_plain_utf8() {
+        assert_eq!(round_trip("字幕".as_bytes(), "字幕"), "字幕".as_bytes());
+    }
+
+    #[test]
+    fn encode_keeps_utf8_bom() {
+        let input = b"\xEF\xBB\xBF\xE5\xAD\x97";
+        assert_eq!(round_trip(input, "字"), input);
+    }
+
+    #[test]
+    fn encode_keeps_utf16le() {
+        let input = encode_text(
+            "字幕",
+            TextEncoding {
+                encoding: encoding_rs::UTF_16LE,
+                bom: true,
+            },
+        );
+        assert_eq!(&input[..2], b"\xFF\xFE");
+        assert_eq!(round_trip(&input, "字幕"), input);
+    }
+
+    #[test]
+    fn encode_keeps_utf16be() {
+        let input = encode_text(
+            "字幕",
+            TextEncoding {
+                encoding: encoding_rs::UTF_16BE,
+                bom: true,
+            },
+        );
+        assert_eq!(&input[..2], b"\xFE\xFF");
+        assert_eq!(round_trip(&input, "字幕"), input);
+    }
+
+    #[test]
+    fn encode_keeps_big5() {
+        let (input, _, _) = encoding_rs::BIG5.encode("台灣繁體字幕測試內容夠長以利偵測");
+        let out = round_trip(&input, "臺灣繁體字幕測試內容夠長以利偵測");
+        let (expected, _, _) = encoding_rs::BIG5.encode("臺灣繁體字幕測試內容夠長以利偵測");
+        assert_eq!(out, expected.as_ref());
+    }
+
+    #[test]
+    fn encode_falls_back_to_utf8_bom_when_unrepresentable() {
+        let (input, _, _) = encoding_rs::BIG5.encode("台灣繁體字幕測試內容夠長以利偵測");
+        // Simplified characters such as 体 and 测 are not in Big5.
+        let out = round_trip(&input, "台湾繁体字幕测试内容够长以利侦测");
+        let mut expected = b"\xEF\xBB\xBF".to_vec();
+        expected.extend_from_slice("台湾繁体字幕测试内容够长以利侦测".as_bytes());
+        assert_eq!(out, expected);
+    }
+
+    // --- write_atomic ---
+
+    #[test]
+    fn write_atomic_replaces_contents() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.srt");
+        std::fs::write(&path, "old").unwrap();
+        write_atomic(&path, |f| {
+            std::io::Write::write_all(f, b"new").map_err(|e| e.to_string())
+        })
+        .unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new");
+    }
+
+    #[test]
+    fn write_atomic_failure_keeps_original() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.srt");
+        std::fs::write(&path, "original").unwrap();
+        let result = write_atomic(&path, |f| {
+            std::io::Write::write_all(f, b"half").unwrap();
+            Err("ZIP_WRITE_FAILED:disk full".to_string())
+        });
+        assert_eq!(result, Err("ZIP_WRITE_FAILED:disk full".to_string()));
+        assert_eq!(std::fs::read(&path).unwrap(), b"original");
+        // The temp file is cleaned up.
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_keeps_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.srt");
+        std::fs::write(&path, "old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_atomic(&path, |_| Ok(())).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o644);
+    }
+
+    #[test]
     fn decode_empty_is_empty() {
-        let (text, _) = decode_text(&[]);
+        let (text, _) = decode_text(&[]).unwrap();
         assert_eq!(text, "");
     }
 

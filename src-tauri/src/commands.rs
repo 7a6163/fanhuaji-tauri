@@ -3,9 +3,10 @@ use crate::epub;
 use crate::{
     API_BASE, ApiConvertData, ApiResponse, ConvertEpubParams, ConvertFileParams, ConvertFileResult,
     ConvertOptions, EpubProgress, HttpClient, MAX_CHUNK_BYTES, ServiceInfo, build_api_params,
-    build_output_name, check_file_size, decode_text, epub_warnings, is_fatal_api_error,
-    resolve_output_dir, split_text, validate_api_response,
+    build_output_name, check_file_size, decode_text, encode_text, epub_warnings,
+    is_fatal_api_error, resolve_output_dir, split_text, validate_api_response, write_atomic,
 };
+use std::io::Write;
 use std::path::Path;
 use tauri::Emitter;
 use tauri_plugin_dialog::DialogExt;
@@ -47,8 +48,8 @@ pub async fn open_files_dialog(app: tauri::AppHandle) -> Result<Vec<String>, Str
         .add_filter(
             "支援檔案",
             &[
-                "txt", "srt", "ass", "ssa", "lrc", "vtt", "sub", "sup", "csv", "tsv", "json",
-                "xml", "html", "htm", "md", "epub",
+                "txt", "srt", "ass", "ssa", "lrc", "vtt", "sub", "csv", "tsv", "json", "xml",
+                "html", "htm", "md", "epub",
             ],
         )
         .add_filter("所有檔案", &["*"])
@@ -189,7 +190,7 @@ pub async fn convert_file(
     let raw = tokio::fs::read(&canonical)
         .await
         .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
-    let (content, _encoding) = decode_text(&raw);
+    let (content, source_encoding) = decode_text(&raw)?;
 
     // Convert in newline-aligned chunks (the API's front-end rejects request
     // bodies over ~1 MiB), streaming progress to the UI for large files.
@@ -220,10 +221,17 @@ pub async fn convert_file(
         .map_err(|e| format!("OUTPUT_DIR_INVALID:{e}"))?;
     let output_path = canonical_dir.join(&output_name);
 
-    // Write output
-    tokio::fs::write(&output_path, &converted_text)
-        .await
-        .map_err(|e| format!("FILE_WRITE_FAILED:{e}"))?;
+    // Write output in the source file's encoding
+    let bytes = encode_text(&converted_text, source_encoding);
+    let out_path = output_path.clone();
+    tokio::task::spawn_blocking(move || {
+        write_atomic(&out_path, |f| {
+            f.write_all(&bytes)
+                .map_err(|e| format!("FILE_WRITE_FAILED:{e}"))
+        })
+    })
+    .await
+    .map_err(|e| format!("FILE_WRITE_FAILED:{e}"))??;
 
     Ok(ConvertFileResult {
         output_name,
@@ -261,7 +269,7 @@ pub async fn preview_convert(
     let raw = tokio::fs::read(&canonical)
         .await
         .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
-    let (content, _encoding) = decode_text(&raw);
+    let (content, _) = decode_text(&raw)?;
 
     // Only the preview window is sent to the API — a large file would be
     // rejected for body size and the extra text would just be discarded here.
