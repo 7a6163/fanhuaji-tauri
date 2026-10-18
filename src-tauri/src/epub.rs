@@ -727,11 +727,29 @@ mod tests {
 
     #[test]
     fn opf_ignores_bad_entity_outside_scope() {
-        let opf = r#"<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:rights>&copy; 2026</dc:rights><dc:title>书名</dc:title></metadata></package>"#;
+        let opf = r#"<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:rights>&bogus; 2026</dc:rights><dc:title>书名</dc:title></metadata></package>"#;
         let (text, count) = extract_text(ContentKind::Opf, opf).unwrap();
         assert_eq!((text.as_str(), count), ("书名", 1));
         let result = replace_text(ContentKind::Opf, opf, "書名").unwrap();
         assert_eq!(result, opf.replace("书名", "書名"));
+    }
+
+    #[test]
+    fn xhtml_html_entities_are_converted() {
+        let xhtml = "<html><body><p>第一章&nbsp;开始&hellip;</p><p>&copy; 作者</p></body></html>";
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(
+            text.split(TEXT_DELIMITER).collect::<Vec<_>>(),
+            vec!["第一章\u{a0}开始\u{2026}", "\u{a9} 作者"]
+        );
+
+        let converted = format!("第一章\u{a0}開始\u{2026}{TEXT_DELIMITER}\u{a9} 作者");
+        let result = replace_text(ContentKind::Xhtml, xhtml, &converted).unwrap();
+        assert_eq!(
+            result,
+            "<html><body><p>第一章\u{a0}開始\u{2026}</p><p>\u{a9} 作者</p></body></html>"
+        );
     }
 
     #[test]

@@ -318,6 +318,34 @@ pub(crate) fn validate_api_response(api: ApiResponse) -> Result<ApiConvertData, 
     api.data.ok_or_else(|| "API_NO_DATA".to_string())
 }
 
+/// Whether a conversion error means the API is unreachable or rejecting every
+/// request, so converting further EPUB chapters would only fail the same way.
+pub(crate) fn is_fatal_api_error(err: &str) -> bool {
+    let code = err.split(':').next().unwrap_or_default();
+    matches!(
+        code,
+        "NET_REQUEST_FAILED" | "HTTP_ERROR" | "PAYLOAD_TOO_LARGE" | "RESPONSE_PARSE_FAILED"
+    )
+}
+
+/// Summarise per-chapter EPUB results: `None` when every chapter succeeded, an
+/// `EPUB_PARTIAL_FAILED` warning when some did, or the last chapter error when
+/// chapters failed and none converted (the output would be unconverted).
+pub(crate) fn epub_warnings(
+    failed: usize,
+    converted: usize,
+    total: usize,
+    last_error: Option<String>,
+) -> Result<Option<String>, String> {
+    if failed == 0 {
+        return Ok(None);
+    }
+    if converted == 0 {
+        return Err(last_error.unwrap_or_else(|| format!("EPUB_PARTIAL_FAILED:{failed}/{total}")));
+    }
+    Ok(Some(format!("EPUB_PARTIAL_FAILED:{failed}/{total}")))
+}
+
 pub(crate) fn check_file_size(len: u64) -> Result<(), String> {
     if len > MAX_FILE_BYTES {
         return Err("FILE_TOO_LARGE".to_string());
@@ -932,6 +960,44 @@ mod tests {
     #[test]
     fn max_file_bytes_is_50mb() {
         assert_eq!(MAX_FILE_BYTES, 50 * 1024 * 1024);
+    }
+
+    // --- is_fatal_api_error ---
+
+    #[test]
+    fn fatal_api_errors_abort() {
+        assert!(is_fatal_api_error("NET_REQUEST_FAILED:timed out"));
+        assert!(is_fatal_api_error("HTTP_ERROR:502"));
+        assert!(is_fatal_api_error("PAYLOAD_TOO_LARGE"));
+        assert!(is_fatal_api_error("RESPONSE_PARSE_FAILED:eof"));
+    }
+
+    #[test]
+    fn chapter_errors_are_not_fatal() {
+        assert!(!is_fatal_api_error("XML_DECODE_FAILED:bad entity"));
+        assert!(!is_fatal_api_error("API_ERROR:some error"));
+        assert!(!is_fatal_api_error("HTTP_ERROR_LIKE:1"));
+        assert!(!is_fatal_api_error(""));
+    }
+
+    // --- epub_warnings ---
+
+    #[test]
+    fn epub_warnings_none_when_all_succeed() {
+        assert_eq!(epub_warnings(0, 5, 5, None), Ok(None));
+        assert_eq!(epub_warnings(0, 0, 3, None), Ok(None));
+    }
+
+    #[test]
+    fn epub_warnings_partial_failure() {
+        let warn = epub_warnings(3, 37, 40, Some("XML_PARSE_FAILED:x".into()));
+        assert_eq!(warn, Ok(Some("EPUB_PARTIAL_FAILED:3/40".to_string())));
+    }
+
+    #[test]
+    fn epub_warnings_errors_when_nothing_converted() {
+        let err = epub_warnings(2, 0, 4, Some("XML_DECODE_FAILED:x".into()));
+        assert_eq!(err, Err("XML_DECODE_FAILED:x".to_string()));
     }
 
     #[test]

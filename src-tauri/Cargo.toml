@@ -22,7 +22,8 @@ serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "time"] }
 zip = "2"
-quick-xml = "0.36"
+# escape-html: chapters often use HTML entities (&nbsp;, &hellip;) that plain XML rejects.
+quick-xml = { version = "0.36", features = ["escape-html"] }
 tempfile = "3"
 encoding_rs = "0.8"
 chardetng = "0.1"
