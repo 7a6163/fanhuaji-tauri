@@ -3,8 +3,8 @@ use crate::epub;
 use crate::{
     API_BASE, ApiConvertData, ApiResponse, ConvertEpubParams, ConvertFileParams, ConvertFileResult,
     ConvertOptions, EpubProgress, HttpClient, MAX_CHUNK_BYTES, ServiceInfo, build_api_params,
-    build_output_name, check_file_size, decode_text, resolve_output_dir, split_text,
-    validate_api_response,
+    build_output_name, check_file_size, decode_text, epub_warnings, is_fatal_api_error,
+    resolve_output_dir, split_text, validate_api_response,
 };
 use std::path::Path;
 use tauri::Emitter;
@@ -292,6 +292,35 @@ pub async fn preview_convert(
     })
 }
 
+/// Convert one extracted EPUB content file in place. Returns `Ok(false)` when
+/// the file has no text to convert.
+async fn convert_epub_chapter(
+    client: &reqwest::Client,
+    kind: epub::ContentKind,
+    file_path: &Path,
+    opts: ConvertOptions<'_>,
+) -> Result<bool, String> {
+    let xml = tokio::fs::read_to_string(file_path)
+        .await
+        .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
+
+    let (text, count) = epub::extract_text(kind, &xml)?;
+    if count == 0 {
+        return Ok(false);
+    }
+
+    // Chunked, so a chapter over the request-body limit still converts.
+    let (converted, _) = convert_in_chunks(None, client, "", &text, opts).await?;
+    let new_xml = epub::replace_text(kind, &xml, &converted)?;
+    tokio::fs::write(file_path, new_xml)
+        .await
+        .map_err(|e| format!("FILE_WRITE_FAILED:{e}"))?;
+
+    // Small delay between API calls
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    Ok(true)
+}
+
 #[tauri::command]
 pub async fn convert_epub(
     app: tauri::AppHandle,
@@ -329,85 +358,48 @@ pub async fn convert_epub(
 
     let chapter_total = content_files.len();
     let mut failed_chapters: usize = 0;
+    let mut converted_chapters: usize = 0;
+    let mut last_error = None;
+    let opts = ConvertOptions {
+        converter: &converter,
+        pre_replace: &pre_replace,
+        post_replace: &post_replace,
+        protect_replace: &protect_replace,
+        modules: &modules,
+    };
 
-    // Convert each chapter
     for (i, content_file) in content_files.iter().enumerate() {
-        let chapter_name = epub::chapter_display_name(&content_file.relative_path);
-
-        // Emit progress
         let _ = app.emit(
             "epub-progress",
             EpubProgress {
                 file_id: file_id.clone(),
                 chapter_index: i + 1,
                 chapter_total,
-                chapter_name: chapter_name.clone(),
+                chapter_name: epub::chapter_display_name(&content_file.relative_path),
             },
         );
 
         let file_path = temp_dir.path().join(&content_file.relative_path);
-        let xhtml = match tokio::fs::read_to_string(&file_path).await {
-            Ok(s) => s,
-            Err(_) => {
+        match convert_epub_chapter(&client.0, content_file.kind, &file_path, opts).await {
+            Ok(true) => converted_chapters += 1,
+            Ok(false) => {}
+            // Offline or the API is rejecting every request: the remaining
+            // chapters would fail the same way, each after its own timeout.
+            Err(e) if is_fatal_api_error(&e) => return Err(e),
+            Err(e) => {
                 failed_chapters += 1;
-                continue;
+                last_error = Some(e);
             }
-        };
-
-        // Extract text
-        let (text, count) = match epub::extract_text(content_file.kind, &xhtml) {
-            Ok(r) => r,
-            Err(_) => {
-                failed_chapters += 1;
-                continue;
-            }
-        };
-
-        if count == 0 {
-            continue; // No text to convert
         }
-
-        // Call API — chunked, so a chapter over the request-body limit still
-        // converts instead of being counted as a failure.
-        let converted = match convert_in_chunks(
-            None,
-            &client.0,
-            "",
-            &text,
-            ConvertOptions {
-                converter: &converter,
-                pre_replace: &pre_replace,
-                post_replace: &post_replace,
-                protect_replace: &protect_replace,
-                modules: &modules,
-            },
-        )
-        .await
-        {
-            Ok((converted, _)) => converted,
-            Err(_) => {
-                failed_chapters += 1;
-                continue;
-            }
-        };
-
-        // Replace text in XHTML
-        let new_xhtml = match epub::replace_text(content_file.kind, &xhtml, &converted) {
-            Ok(r) => r,
-            Err(_) => {
-                failed_chapters += 1;
-                continue;
-            }
-        };
-
-        if tokio::fs::write(&file_path, new_xhtml).await.is_err() {
-            failed_chapters += 1;
-            continue;
-        }
-
-        // Small delay between API calls
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
+
+    // Decided before repacking so a book where nothing converted is not written out.
+    let warnings = epub_warnings(
+        failed_chapters,
+        converted_chapters,
+        chapter_total,
+        last_error,
+    )?;
 
     // Determine output path
     let input = Path::new(&input_path);
@@ -425,14 +417,6 @@ pub async fn convert_epub(
     tokio::task::spawn_blocking(move || epub::repack_epub(&temp_path, &out_path))
         .await
         .map_err(|e| format!("EPUB_REPACK_FAILED:{e}"))??;
-
-    let warnings = if failed_chapters == 0 {
-        None
-    } else {
-        Some(format!(
-            "EPUB_PARTIAL_FAILED:{failed_chapters}/{chapter_total}"
-        ))
-    };
 
     Ok(ConvertFileResult {
         output_name,
