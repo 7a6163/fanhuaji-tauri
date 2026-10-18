@@ -168,6 +168,13 @@ describe("fileMessage", () => {
     );
   });
 
+  it("omits the chapter name when there is none", () => {
+    const f = makeFile({ status: "converting", chapterIndex: 3, chapterTotal: 5 });
+    expect(fileMessage(f)).toBe(
+      escHtml(t("file.convertingChapter", { current: "3", total: "5", name: "" })),
+    );
+  });
+
   it("shows plain converting without chapter info", () => {
     expect(fileMessage(makeFile({ status: "converting" }))).toBe(escHtml(t("file.converting")));
   });
