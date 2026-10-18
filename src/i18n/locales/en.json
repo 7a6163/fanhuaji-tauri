@@ -62,6 +62,11 @@
   "module.auto": "Auto",
   "module.enable": "Enable",
   "module.disable": "Disable",
+  "module.categoryUnknown": "Unknown",
+  "dialog.openFiles": "Open files",
+  "dialog.supportedFiles": "Supported files",
+  "dialog.allFiles": "All files",
+  "dialog.pickFolder": "Choose output folder",
 
   "settings.language.title": "Language",
 

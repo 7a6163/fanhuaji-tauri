@@ -428,7 +428,11 @@ function addFiles(paths: string[]) {
 
 async function openFiles() {
   try {
-    const selected: string[] = await invoke("open_files_dialog");
+    const selected: string[] = await invoke("open_files_dialog", {
+      title: t("dialog.openFiles"),
+      supportedLabel: t("dialog.supportedFiles"),
+      allLabel: t("dialog.allFiles"),
+    });
     if (selected.length > 0) addFiles(selected);
   } catch {
     // Dialog cancelled or failed — no action needed
@@ -712,7 +716,9 @@ if (savedFolder && saveFolderSelect) {
 
 saveFolderSelect?.addEventListener("change", async () => {
   if (saveFolderSelect.value === "custom") {
-    const folder: string | null = await invoke("pick_save_folder");
+    const folder: string | null = await invoke("pick_save_folder", {
+      title: t("dialog.pickFolder"),
+    });
     if (folder) {
       setCustomFolder(folder);
     } else {
@@ -779,7 +785,7 @@ function renderModuleCategories() {
   container.innerHTML = categories
     .map(
       (c, i) =>
-        `<button type="button" class="module-cat-btn${i === 0 ? " active" : ""}" data-category="${escHtml(c)}">${escHtml(c)}</button>`,
+        `<button type="button" class="module-cat-btn${i === 0 ? " active" : ""}" data-category="${escHtml(c)}"${c ? "" : ' data-i18n="module.categoryUnknown"'}>${escHtml(c || t("module.categoryUnknown"))}</button>`,
     )
     .join("");
 
