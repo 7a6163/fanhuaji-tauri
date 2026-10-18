@@ -108,6 +108,7 @@
   "errors.FILE_READ_FAILED": "无法读取文件：{detail}",
   "errors.FILE_WRITE_FAILED": "无法写入文件：{detail}",
   "errors.FILE_TOO_LARGE": "文件过大（上限 50 MB）",
+  "errors.NOT_TEXT_FILE": "不是文本文件",
   "errors.FILENAME_UNAVAILABLE": "无法取得文件名称",
   "errors.OUTPUT_DIR_INVALID": "输出文件夹无效：{detail}",
   "errors.OUTPUT_CREATE_FAILED": "无法建立输出文件：{detail}",

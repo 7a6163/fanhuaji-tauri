@@ -108,6 +108,7 @@
   "errors.FILE_READ_FAILED": "Cannot read file: {detail}",
   "errors.FILE_WRITE_FAILED": "Cannot write file: {detail}",
   "errors.FILE_TOO_LARGE": "File too large (limit 50 MB)",
+  "errors.NOT_TEXT_FILE": "Not a text file",
   "errors.FILENAME_UNAVAILABLE": "Cannot get file name",
   "errors.OUTPUT_DIR_INVALID": "Invalid output directory: {detail}",
   "errors.OUTPUT_CREATE_FAILED": "Cannot create output file: {detail}",

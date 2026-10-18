@@ -287,10 +287,14 @@ pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<Str
     String::from_utf8(buf).map_err(|e| format!("UTF8_ENCODE_FAILED:{e}"))
 }
 
-/// Repack extracted files into a valid EPUB ZIP.
+/// Repack extracted files into a valid EPUB ZIP, written atomically so an
+/// overwritten input survives a failed repack.
 /// The mimetype file must be first and uncompressed per EPUB spec.
 pub fn repack_epub(temp_dir: &Path, output_path: &Path) -> Result<(), String> {
-    let file = fs::File::create(output_path).map_err(|e| format!("OUTPUT_CREATE_FAILED:{e}"))?;
+    crate::write_atomic(output_path, |file| write_epub_zip(temp_dir, file))
+}
+
+fn write_epub_zip(temp_dir: &Path, file: &mut fs::File) -> Result<(), String> {
     let mut zip = ZipWriter::new(file);
 
     // Write mimetype first (uncompressed, no extra field)
