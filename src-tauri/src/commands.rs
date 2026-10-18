@@ -1,14 +1,13 @@
 use crate::build_service_info;
 use crate::epub;
 use crate::{
-    API_BASE, ApiConvertData, ApiResponse, ConvertEpubParams, ConvertFileParams, ConvertFileResult,
-    ConvertOptions, EpubProgress, HttpClient, ServiceInfo, build_api_params, build_output_name,
-    check_file_size, chunk_budget, decode_text, encode_text, epub_warnings, is_fatal_api_error,
-    resolve_output_dir, split_text, trim_partial_utf8, truncate_chars, validate_api_response,
-    write_atomic,
+    API_BASE, ApiConvertData, ApiResponse, ConvertFileResult, ConvertOptions, ConvertParams,
+    EpubProgress, HttpClient, ServiceInfo, build_api_params, build_output_name, check_file_size,
+    chunk_budget, decode_text, encode_text, epub_warnings, is_fatal_api_error, resolve_output_dir,
+    split_text, trim_partial_utf8, truncate_chars, validate_api_response, write_atomic,
 };
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::Emitter;
 use tauri_plugin_dialog::DialogExt;
 
@@ -161,35 +160,40 @@ async fn convert_in_chunks(
     Ok((output, result_converter))
 }
 
-#[tauri::command]
-pub async fn convert_file(
-    app: tauri::AppHandle,
-    client: tauri::State<'_, HttpClient>,
-    params: ConvertFileParams,
-) -> Result<ConvertFileResult, String> {
-    let ConvertFileParams {
-        file_id,
-        input_path,
-        converter,
-        save_folder,
-        naming,
-        custom_suffix,
-        pre_replace,
-        post_replace,
-        protect_replace,
-        modules,
-    } = params;
-
-    // Canonicalize and validate input path
-    let canonical = tokio::fs::canonicalize(&input_path)
+/// Canonicalize the input path and reject files over the size cap.
+async fn resolve_input(input_path: &str) -> Result<PathBuf, String> {
+    let canonical = tokio::fs::canonicalize(input_path)
         .await
         .map_err(|e| format!("INVALID_PATH:{e}"))?;
-
-    // Check file size
     let metadata = tokio::fs::metadata(&canonical)
         .await
         .map_err(|e| format!("FILE_METADATA_FAILED:{e}"))?;
     check_file_size(metadata.len())?;
+    Ok(canonical)
+}
+
+/// Output path and file name for a conversion. The path is built from the
+/// canonical directory to prevent traversal.
+async fn resolve_output(
+    params: &ConvertParams,
+    converter: &str,
+) -> Result<(PathBuf, String), String> {
+    let input = Path::new(&params.input_path);
+    let dir = resolve_output_dir(input, &params.save_folder)?;
+    let output_name = build_output_name(input, &params.naming, converter, &params.custom_suffix)?;
+    let canonical_dir = tokio::fs::canonicalize(&dir)
+        .await
+        .map_err(|e| format!("OUTPUT_DIR_INVALID:{e}"))?;
+    Ok((canonical_dir.join(&output_name), output_name))
+}
+
+#[tauri::command]
+pub async fn convert_file(
+    app: tauri::AppHandle,
+    client: tauri::State<'_, HttpClient>,
+    params: ConvertParams,
+) -> Result<ConvertFileResult, String> {
+    let canonical = resolve_input(&params.input_path).await?;
 
     // Read the file as raw bytes and decode with charset detection so that
     // non-UTF-8 subtitle files (Big5, GBK, Shift_JIS, UTF-16, ...) are handled.
@@ -203,29 +207,13 @@ pub async fn convert_file(
     let (converted_text, result_converter) = convert_in_chunks(
         Some(&app),
         &client.0,
-        &file_id,
+        &params.file_id,
         &content,
-        ConvertOptions {
-            converter: &converter,
-            pre_replace: &pre_replace,
-            post_replace: &post_replace,
-            protect_replace: &protect_replace,
-            modules: &modules,
-        },
+        params.options(),
     )
     .await?;
 
-    // Determine output directory
-    let input = Path::new(&input_path);
-    let dir = resolve_output_dir(input, &save_folder)?;
-
-    let output_name = build_output_name(input, &naming, &result_converter, &custom_suffix)?;
-
-    // Build output path from canonical directory to prevent traversal
-    let canonical_dir = tokio::fs::canonicalize(&dir)
-        .await
-        .map_err(|e| format!("OUTPUT_DIR_INVALID:{e}"))?;
-    let output_path = canonical_dir.join(&output_name);
+    let (output_path, output_name) = resolve_output(&params, &result_converter).await?;
 
     // Write output in the source file's encoding
     let bytes = encode_text(&converted_text, source_encoding);
@@ -266,7 +254,7 @@ pub struct PreviewResult {
 #[tauri::command]
 pub async fn preview_convert(
     client: tauri::State<'_, HttpClient>,
-    params: ConvertFileParams,
+    params: ConvertParams,
 ) -> Result<PreviewResult, String> {
     // Only the start of the file is shown, so only the start is read: a large
     // file would cost a full read and decode on every click otherwise.
@@ -288,18 +276,7 @@ pub async fn preview_convert(
     // rejected for body size and the extra text would just be discarded here.
     let (original, input_truncated) = truncate_chars(&content, PREVIEW_CHAR_LIMIT);
 
-    let data = convert_chunk(
-        &client.0,
-        original,
-        ConvertOptions {
-            converter: &params.converter,
-            pre_replace: &params.pre_replace,
-            post_replace: &params.post_replace,
-            protect_replace: &params.protect_replace,
-            modules: &params.modules,
-        },
-    )
-    .await?;
+    let data = convert_chunk(&client.0, original, params.options()).await?;
 
     // Bopomofo/pinyin output can far exceed its input, so check both sides.
     let (converted, output_truncated) = truncate_chars(&data.text, PREVIEW_CHAR_LIMIT);
@@ -344,34 +321,13 @@ async fn convert_epub_chapter(
 pub async fn convert_epub(
     app: tauri::AppHandle,
     client: tauri::State<'_, HttpClient>,
-    params: ConvertEpubParams,
+    params: ConvertParams,
 ) -> Result<ConvertFileResult, String> {
-    let ConvertEpubParams {
-        file_id,
-        input_path,
-        converter,
-        save_folder,
-        naming,
-        custom_suffix,
-        pre_replace,
-        post_replace,
-        protect_replace,
-        modules,
-    } = params;
-
-    let canonical = tokio::fs::canonicalize(&input_path)
-        .await
-        .map_err(|e| format!("INVALID_PATH:{e}"))?;
-
-    let metadata = tokio::fs::metadata(&canonical)
-        .await
-        .map_err(|e| format!("FILE_METADATA_FAILED:{e}"))?;
-    check_file_size(metadata.len())?;
+    let canonical = resolve_input(&params.input_path).await?;
 
     // Extract EPUB
-    let canonical_clone = canonical.clone();
     let (temp_dir, content_files) =
-        tokio::task::spawn_blocking(move || epub::extract_epub(&canonical_clone))
+        tokio::task::spawn_blocking(move || epub::extract_epub(&canonical))
             .await
             .map_err(|e| format!("EPUB_EXTRACT_FAILED:{e}"))??;
 
@@ -379,19 +335,13 @@ pub async fn convert_epub(
     let mut failed_chapters: usize = 0;
     let mut converted_chapters: usize = 0;
     let mut last_error = None;
-    let opts = ConvertOptions {
-        converter: &converter,
-        pre_replace: &pre_replace,
-        post_replace: &post_replace,
-        protect_replace: &protect_replace,
-        modules: &modules,
-    };
+    let opts = params.options();
 
     for (i, content_file) in content_files.iter().enumerate() {
         let _ = app.emit(
             "epub-progress",
             EpubProgress {
-                file_id: file_id.clone(),
+                file_id: params.file_id.clone(),
                 chapter_index: i + 1,
                 chapter_total,
                 chapter_name: epub::chapter_display_name(&content_file.relative_path),
@@ -420,15 +370,7 @@ pub async fn convert_epub(
         last_error,
     )?;
 
-    // Determine output path
-    let input = Path::new(&input_path);
-    let dir = resolve_output_dir(input, &save_folder)?;
-
-    let output_name = build_output_name(input, &naming, &converter, &custom_suffix)?;
-    let canonical_dir = tokio::fs::canonicalize(&dir)
-        .await
-        .map_err(|e| format!("OUTPUT_DIR_INVALID:{e}"))?;
-    let output_path = canonical_dir.join(&output_name);
+    let (output_path, output_name) = resolve_output(&params, &params.converter).await?;
 
     // Repack EPUB
     let temp_path = temp_dir.path().to_path_buf();

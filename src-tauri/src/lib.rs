@@ -68,9 +68,11 @@ pub(crate) struct ConvertFileResult {
     pub warnings: Option<String>,
 }
 
+/// Arguments shared by `convert_file`, `convert_epub` and `preview_convert`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct ConvertFileParams {
+pub(crate) struct ConvertParams {
+    /// Tags progress events; the preview sends none.
     #[serde(default)]
     pub file_id: String,
     pub input_path: String,
@@ -85,20 +87,16 @@ pub(crate) struct ConvertFileParams {
     pub modules: String,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ConvertEpubParams {
-    pub file_id: String,
-    pub input_path: String,
-    pub converter: String,
-    pub save_folder: String,
-    pub naming: String,
-    #[serde(default)]
-    pub custom_suffix: String,
-    pub pre_replace: String,
-    pub post_replace: String,
-    pub protect_replace: String,
-    pub modules: String,
+impl ConvertParams {
+    pub fn options(&self) -> ConvertOptions<'_> {
+        ConvertOptions {
+            converter: &self.converter,
+            pre_replace: &self.pre_replace,
+            post_replace: &self.post_replace,
+            protect_replace: &self.protect_replace,
+            modules: &self.modules,
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -1079,9 +1077,10 @@ mod tests {
     }
 
     #[test]
-    fn convert_file_params_deserializes() {
+    fn convert_params_deserializes() {
         let json = r#"{"inputPath":"/tmp/test.txt","converter":"Taiwan","saveFolder":"same","naming":"auto","preReplace":"","postReplace":"","protectReplace":"","modules":"{}"}"#;
-        let params: ConvertFileParams = serde_json::from_str(json).unwrap();
+        let params: ConvertParams = serde_json::from_str(json).unwrap();
+        assert!(params.file_id.is_empty());
         assert_eq!(params.input_path, "/tmp/test.txt");
         assert_eq!(params.converter, "Taiwan");
         assert_eq!(params.save_folder, "same");
@@ -1244,12 +1243,24 @@ mod tests {
     }
 
     #[test]
-    fn convert_epub_params_deserializes() {
+    fn convert_params_deserializes_file_id() {
         let json = r#"{"fileId":"f1","inputPath":"/tmp/book.epub","converter":"Taiwan","saveFolder":"same","naming":"auto","preReplace":"","postReplace":"","protectReplace":"","modules":"{}"}"#;
-        let params: ConvertEpubParams = serde_json::from_str(json).unwrap();
+        let params: ConvertParams = serde_json::from_str(json).unwrap();
         assert_eq!(params.file_id, "f1");
         assert_eq!(params.input_path, "/tmp/book.epub");
         assert_eq!(params.converter, "Taiwan");
+    }
+
+    #[test]
+    fn convert_params_options_borrows_fields() {
+        let json = r#"{"inputPath":"/tmp/a.txt","converter":"China","saveFolder":"same","naming":"auto","preReplace":"a=b","postReplace":"c=d","protectReplace":"e","modules":"{\"x\":1}"}"#;
+        let params: ConvertParams = serde_json::from_str(json).unwrap();
+        let opts = params.options();
+        assert_eq!(opts.converter, "China");
+        assert_eq!(opts.pre_replace, "a=b");
+        assert_eq!(opts.post_replace, "c=d");
+        assert_eq!(opts.protect_replace, "e");
+        assert_eq!(opts.modules, r#"{"x":1}"#);
     }
 
     #[test]

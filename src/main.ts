@@ -24,6 +24,7 @@ import {
   isEpubFile,
   isSafeUrl,
   parseFilePath,
+  resetErrors,
   shouldResumeConversion,
 } from "./utils";
 
@@ -328,6 +329,24 @@ function renderDiff(original: string, converted: string): { html: string; change
   return { html: out.join(""), changedLines };
 }
 
+/** The convert/preview command arguments for a file, from the current settings. */
+function readConvertParams(file: FileEntry) {
+  const value = (id: string, fallback: string) =>
+    (document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null)?.value ?? fallback;
+  return {
+    fileId: file.id,
+    inputPath: `${file.inputPath}/${file.inputName}`,
+    converter: value("converter", "Taiwan"),
+    saveFolder: value("save-folder", "same"),
+    naming: value("naming", "auto"),
+    customSuffix: value("custom-suffix", ""),
+    preReplace: value("pre-replace", ""),
+    postReplace: value("post-replace", ""),
+    protectReplace: value("protect-replace", ""),
+    modules: JSON.stringify(buildModuleOverrides(moduleSettings)),
+  };
+}
+
 async function previewFile(file: FileEntry): Promise<void> {
   const isCurrent = previewGuard.begin();
   const ext = fileExt(file.inputName);
@@ -349,25 +368,9 @@ async function previewFile(file: FileEntry): Promise<void> {
   previewBody.innerHTML = `<div class="preview-loading"><i class="ti ti-loader-2"></i> ${escHtml(t("preview.loading"))}</div>`;
 
   try {
-    const converter =
-      (document.getElementById("converter") as HTMLSelectElement | null)?.value ?? "Taiwan";
-    const params = {
-      inputPath: `${file.inputPath}/${file.inputName}`,
-      converter,
-      saveFolder:
-        (document.getElementById("save-folder") as HTMLSelectElement | null)?.value ?? "same",
-      naming: (document.getElementById("naming") as HTMLSelectElement | null)?.value ?? "auto",
-      customSuffix:
-        (document.getElementById("custom-suffix") as HTMLInputElement | null)?.value ?? "",
-      preReplace:
-        (document.getElementById("pre-replace") as HTMLTextAreaElement | null)?.value ?? "",
-      postReplace:
-        (document.getElementById("post-replace") as HTMLTextAreaElement | null)?.value ?? "",
-      protectReplace:
-        (document.getElementById("protect-replace") as HTMLTextAreaElement | null)?.value ?? "",
-      modules: JSON.stringify(buildModuleOverrides(moduleSettings)),
-    };
-    const res = await invoke<PreviewResult>("preview_convert", { params });
+    const res = await invoke<PreviewResult>("preview_convert", {
+      params: readConvertParams(file),
+    });
     if (!isCurrent()) return;
     const diff = renderDiff(res.original, res.converted);
     const chars = [...res.original].length;
@@ -409,7 +412,6 @@ function addFiles(paths: string[]) {
       id: crypto.randomUUID(),
       inputPath: dir,
       inputName: name,
-      encoding: "UTF-8",
       status: "pending" as const,
       message: "",
       outputName: "",
@@ -444,21 +446,9 @@ async function openFiles() {
 async function convertPending() {
   if (isConverting) return;
 
-  const converterEl = document.getElementById("converter") as HTMLSelectElement | null;
-  const converter = converterEl?.value ?? "Taiwan";
-
-  const saveFolderEl = document.getElementById("save-folder") as HTMLSelectElement | null;
-  const preReplace =
-    (document.getElementById("pre-replace") as HTMLTextAreaElement | null)?.value ?? "";
-  const postReplace =
-    (document.getElementById("post-replace") as HTMLTextAreaElement | null)?.value ?? "";
-  const protectReplace =
-    (document.getElementById("protect-replace") as HTMLTextAreaElement | null)?.value ?? "";
-
   const pendingFiles = files.filter((f) => f.status === "pending");
   if (pendingFiles.length === 0) return;
 
-  const moduleOverrides = buildModuleOverrides(moduleSettings);
   const totalPending = pendingFiles.length;
   let completedCount = 0;
 
@@ -474,26 +464,11 @@ async function convertPending() {
       render();
 
       try {
-        const fullPath = `${file.inputPath}/${file.inputName}`;
-        const commonParams = {
-          fileId: file.id,
-          inputPath: fullPath,
-          converter,
-          saveFolder: saveFolderEl?.value ?? "same",
-          naming: namingEl?.value ?? "auto",
-          customSuffix:
-            (document.getElementById("custom-suffix") as HTMLInputElement | null)?.value ?? "",
-          preReplace,
-          postReplace,
-          protectReplace,
-          modules: JSON.stringify(moduleOverrides),
-        };
-
-        const result: { outputName: string; outputPath: string; warnings?: string } = isEpubFile(
-          file.inputName,
-        )
-          ? await invoke("convert_epub", { params: { ...commonParams, fileId: file.id } })
-          : await invoke("convert_file", { params: commonParams });
+        const params = readConvertParams(file);
+        const result: { outputName: string; outputPath: string; warnings?: string } = await invoke(
+          isEpubFile(file.inputName) ? "convert_epub" : "convert_file",
+          { params },
+        );
 
         files = files.map((f) =>
           f.id === file.id
@@ -855,9 +830,7 @@ convertBtn.addEventListener("click", () => {
 });
 
 retryBtn.addEventListener("click", () => {
-  files = files.map((f) =>
-    f.status === "error" ? { ...f, status: "pending" as const, message: "" } : f,
-  );
+  files = resetErrors(files);
   render();
   void convertPending();
 });

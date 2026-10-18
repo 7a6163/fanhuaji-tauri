@@ -1,7 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { t } from "../i18n/i18n";
 import {
-  activateTab,
   buildModuleOverrides,
   countByStatus,
   createRequestGuard,
@@ -9,15 +8,11 @@ import {
   type FileEntry,
   fileExt,
   fileMessage,
-  fileTooltip,
   isEpubFile,
   isSafeUrl,
   parseFilePath,
-  removeCompleted,
   resetErrors,
   shouldResumeConversion,
-  statusDotHtml,
-  statusLabel,
 } from "../utils";
 
 // --- escHtml ---
@@ -58,28 +53,6 @@ describe("escHtml", () => {
 
 // --- statusLabel ---
 
-describe("statusLabel", () => {
-  it("returns 待轉換 for pending", () => {
-    expect(statusLabel("pending")).toBe("待轉換");
-  });
-
-  it("returns 轉換中… for converting", () => {
-    expect(statusLabel("converting")).toBe("轉換中…");
-  });
-
-  it("returns 完成 for success", () => {
-    expect(statusLabel("success")).toBe("完成");
-  });
-
-  it("returns 錯誤 for error", () => {
-    expect(statusLabel("error")).toBe("錯誤");
-  });
-
-  it("returns raw value for unknown status", () => {
-    expect(statusLabel("unknown")).toBe("unknown");
-  });
-});
-
 // --- parseFilePath ---
 
 describe("parseFilePath", () => {
@@ -119,7 +92,6 @@ function makeFile(overrides: Partial<FileEntry> = {}): FileEntry {
     id: "test-id",
     inputPath: "/tmp",
     inputName: "test.txt",
-    encoding: "UTF-8",
     status: "pending",
     message: "",
     outputName: "",
@@ -236,30 +208,6 @@ describe("createRequestGuard", () => {
   });
 });
 
-describe("removeCompleted", () => {
-  it("removes files with success status", () => {
-    const files = [
-      makeFile({ id: "1", status: "success" }),
-      makeFile({ id: "2", status: "pending" }),
-      makeFile({ id: "3", status: "error" }),
-    ];
-    const result = removeCompleted(files);
-    expect(result).toHaveLength(2);
-    expect(result.map((f) => f.id)).toEqual(["2", "3"]);
-  });
-
-  it("returns empty array when all completed", () => {
-    const files = [makeFile({ status: "success" })];
-    expect(removeCompleted(files)).toHaveLength(0);
-  });
-
-  it("does not mutate original array", () => {
-    const files = [makeFile({ status: "success" })];
-    removeCompleted(files);
-    expect(files).toHaveLength(1);
-  });
-});
-
 describe("resetErrors", () => {
   it("resets error files to pending", () => {
     const files = [
@@ -328,34 +276,6 @@ describe("buildModuleOverrides", () => {
 });
 
 // --- activateTab ---
-
-describe("activateTab", () => {
-  beforeEach(() => {
-    document.body.innerHTML = `
-      <button class="tab active" data-tab="a">A</button>
-      <button class="tab" data-tab="b">B</button>
-      <div id="tab-a" class="tab-panel active"></div>
-      <div id="tab-b" class="tab-panel"></div>
-    `;
-  });
-
-  afterEach(() => {
-    document.body.innerHTML = "";
-  });
-
-  it("switches active tab", () => {
-    activateTab("b");
-    expect(document.querySelector('[data-tab="a"]')?.classList.contains("active")).toBe(false);
-    expect(document.querySelector('[data-tab="b"]')?.classList.contains("active")).toBe(true);
-    expect(document.getElementById("tab-a")?.classList.contains("active")).toBe(false);
-    expect(document.getElementById("tab-b")?.classList.contains("active")).toBe(true);
-  });
-
-  it("handles non-existent tab gracefully", () => {
-    activateTab("nonexistent");
-    expect(document.querySelector('[data-tab="a"]')?.classList.contains("active")).toBe(false);
-  });
-});
 
 // --- isSafeUrl ---
 
@@ -431,57 +351,4 @@ describe("isEpubFile", () => {
 
 // --- fileTooltip ---
 
-describe("fileTooltip", () => {
-  it("returns outputPath for success with output", () => {
-    const file = makeFile({ status: "success", outputPath: "/tmp/out.txt" });
-    expect(fileTooltip(file)).toBe("/tmp/out.txt");
-  });
-
-  it("returns message for error with message", () => {
-    const file = makeFile({ status: "error", message: "轉換失敗" });
-    expect(fileTooltip(file)).toBe("轉換失敗");
-  });
-
-  it("returns empty string for pending with no message", () => {
-    const file = makeFile({ status: "pending" });
-    expect(fileTooltip(file)).toBe("");
-  });
-
-  it("returns empty string for success without outputPath", () => {
-    const file = makeFile({ status: "success", outputPath: "" });
-    expect(fileTooltip(file)).toBe("");
-  });
-
-  it("returns empty string for error without message", () => {
-    const file = makeFile({ status: "error", message: "" });
-    expect(fileTooltip(file)).toBe("");
-  });
-});
-
 // --- statusDotHtml ---
-
-describe("statusDotHtml", () => {
-  it("produces correct class for pending", () => {
-    const html = statusDotHtml("pending");
-    expect(html).toContain("status-dot");
-    expect(html).toContain("pending");
-  });
-
-  it("produces correct class for converting", () => {
-    const html = statusDotHtml("converting");
-    expect(html).toContain("status-dot");
-    expect(html).toContain("converting");
-  });
-
-  it("produces correct class for success", () => {
-    const html = statusDotHtml("success");
-    expect(html).toContain("status-dot");
-    expect(html).toContain("success");
-  });
-
-  it("produces correct class for error", () => {
-    const html = statusDotHtml("error");
-    expect(html).toContain("status-dot");
-    expect(html).toContain("error");
-  });
-});
