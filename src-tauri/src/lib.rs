@@ -207,10 +207,40 @@ pub(crate) fn build_api_params<'a>(
 
 // --- Text chunking ---
 
-/// Max source bytes per `/convert` request. The API's nginx front-end rejects
-/// request bodies over 1 MiB; percent-encoding expands UTF-8 CJK bytes 3x, so
-/// the source text has to stay well under 1 MiB / 3.
+/// The API's nginx front-end rejects request bodies over 1 MiB.
+const MAX_BODY_BYTES: usize = 1024 * 1024;
+
+/// Upper bound on source bytes per `/convert` request. Percent-encoding expands
+/// UTF-8 CJK bytes 3x, so the source text has to stay well under 1 MiB / 3.
 pub(crate) const MAX_CHUNK_BYTES: usize = 250 * 1024;
+
+/// Below this the replace rules leave too little room for text, and the
+/// request is refused up front instead of being split into thousands of chunks.
+const MIN_CHUNK_BYTES: usize = 16 * 1024;
+
+/// Max source text bytes per `/convert` request for these options.
+///
+/// The replace rules and modules travel in the same body as the text, so their
+/// worst-case (3x) encoded size comes off the body limit before the rest is
+/// divided between text bytes. Fails with `PAYLOAD_TOO_LARGE` when the rules
+/// alone leave less than `MIN_CHUNK_BYTES`.
+pub(crate) fn chunk_budget(opts: ConvertOptions) -> Result<usize, String> {
+    let params = build_api_params(
+        "",
+        opts.converter,
+        opts.pre_replace,
+        opts.post_replace,
+        opts.protect_replace,
+        opts.modules,
+    );
+    // key=value&, with every value byte assumed to become %XX.
+    let others: usize = params.iter().map(|(k, v)| k.len() + 2 + v.len() * 3).sum();
+    let budget = (MAX_BODY_BYTES.saturating_sub(others) / 3).min(MAX_CHUNK_BYTES);
+    if budget < MIN_CHUNK_BYTES {
+        return Err("PAYLOAD_TOO_LARGE".to_string());
+    }
+    Ok(budget)
+}
 
 /// Split `text` into consecutive slices each at most `max_bytes` long.
 ///
@@ -257,6 +287,26 @@ pub(crate) fn split_text(text: &str, max_bytes: usize) -> Vec<&str> {
     }
 
     chunks
+}
+
+// --- Preview helpers ---
+
+/// The first `limit` chars of `s`, and whether anything was cut off.
+pub(crate) fn truncate_chars(s: &str, limit: usize) -> (&str, bool) {
+    match s.char_indices().nth(limit) {
+        Some((end, _)) => (&s[..end], true),
+        None => (s, false),
+    }
+}
+
+/// Drop an incomplete UTF-8 sequence left at the end of a partial read, so
+/// encoding detection doesn't reject otherwise-valid UTF-8 because of it.
+/// Bytes that are not UTF-8 apart from such a tail are returned unchanged.
+pub(crate) fn trim_partial_utf8(bytes: &[u8]) -> &[u8] {
+    match std::str::from_utf8(bytes) {
+        Err(e) if e.error_len().is_none() => &bytes[..e.valid_up_to()],
+        _ => bytes,
+    }
 }
 
 // --- Module parsing ---
@@ -847,6 +897,83 @@ mod tests {
         let chunks = split_text(&text, MAX_CHUNK_BYTES);
         assert_eq!(chunks.concat(), text);
         assert_eq!(chunks.len(), 1);
+    }
+
+    // --- chunk_budget ---
+
+    fn opts_with_rules(rules: &str) -> ConvertOptions<'_> {
+        ConvertOptions {
+            converter: "Taiwan",
+            pre_replace: rules,
+            post_replace: "",
+            protect_replace: "",
+            modules: "{}",
+        }
+    }
+
+    #[test]
+    fn chunk_budget_without_rules_is_the_cap() {
+        assert_eq!(chunk_budget(opts_with_rules("")), Ok(MAX_CHUNK_BYTES));
+    }
+
+    #[test]
+    fn chunk_budget_shrinks_for_large_rules() {
+        // ~100 KiB of CJK rules encode to ~300 KiB, leaving < 250 KiB of text.
+        let rules = "简体=簡體\n".repeat(7000);
+        let budget = chunk_budget(opts_with_rules(&rules)).unwrap();
+        assert!(budget < MAX_CHUNK_BYTES, "budget {budget}");
+        // Text plus rules, both at worst-case 3x, still fits the body limit.
+        assert!(budget * 3 + rules.len() * 3 < MAX_BODY_BYTES);
+    }
+
+    #[test]
+    fn chunk_budget_refuses_rules_that_fill_the_body() {
+        let rules = "简".repeat(MAX_BODY_BYTES / 9);
+        assert_eq!(
+            chunk_budget(opts_with_rules(&rules)),
+            Err("PAYLOAD_TOO_LARGE".to_string())
+        );
+    }
+
+    // --- truncate_chars ---
+
+    #[test]
+    fn truncate_chars_short_input_is_untouched() {
+        assert_eq!(truncate_chars("繁化姬", 3), ("繁化姬", false));
+    }
+
+    #[test]
+    fn truncate_chars_cuts_on_char_boundary() {
+        assert_eq!(truncate_chars("繁化姬", 2), ("繁化", true));
+    }
+
+    // --- trim_partial_utf8 ---
+
+    #[test]
+    fn trim_partial_utf8_drops_cut_char() {
+        let bytes = "字幕".as_bytes();
+        assert_eq!(trim_partial_utf8(&bytes[..4]), "字".as_bytes());
+    }
+
+    #[test]
+    fn trim_partial_utf8_keeps_complete_text() {
+        assert_eq!(trim_partial_utf8("字幕".as_bytes()), "字幕".as_bytes());
+    }
+
+    #[test]
+    fn trim_partial_utf8_leaves_other_encodings() {
+        let (big5, _, _) = encoding_rs::BIG5.encode("台灣");
+        assert_eq!(trim_partial_utf8(&big5), big5.as_ref());
+    }
+
+    #[test]
+    fn partial_utf8_read_is_still_detected_as_utf8() {
+        // A 64 KiB preview read can end mid-character.
+        let text = "繁體中文字幕測試內容，".repeat(50);
+        let cut = &text.as_bytes()[..text.len() - 1];
+        let (decoded, _) = decode_text(trim_partial_utf8(cut)).unwrap();
+        assert!(text.starts_with(&decoded));
+        assert!(!decoded.is_empty());
     }
 
     // --- parse_modules ---

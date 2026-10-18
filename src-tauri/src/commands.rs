@@ -2,11 +2,12 @@ use crate::build_service_info;
 use crate::epub;
 use crate::{
     API_BASE, ApiConvertData, ApiResponse, ConvertEpubParams, ConvertFileParams, ConvertFileResult,
-    ConvertOptions, EpubProgress, HttpClient, MAX_CHUNK_BYTES, ServiceInfo, build_api_params,
-    build_output_name, check_file_size, decode_text, encode_text, epub_warnings,
-    is_fatal_api_error, resolve_output_dir, split_text, validate_api_response, write_atomic,
+    ConvertOptions, EpubProgress, HttpClient, ServiceInfo, build_api_params, build_output_name,
+    check_file_size, chunk_budget, decode_text, encode_text, epub_warnings, is_fatal_api_error,
+    resolve_output_dir, split_text, trim_partial_utf8, truncate_chars, validate_api_response,
+    write_atomic,
 };
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 use tauri::Emitter;
 use tauri_plugin_dialog::DialogExt;
@@ -123,7 +124,7 @@ async fn convert_in_chunks(
     content: &str,
     opts: ConvertOptions<'_>,
 ) -> Result<(String, String), String> {
-    let chunks = split_text(content, MAX_CHUNK_BYTES);
+    let chunks = split_text(content, chunk_budget(opts)?);
     let total = chunks.len();
     let mut output = String::with_capacity(content.len());
     let mut result_converter = opts.converter.to_string();
@@ -248,6 +249,10 @@ pub async fn convert_file(
 /// Cap on characters returned to the UI for a preview, to keep payloads small.
 const PREVIEW_CHAR_LIMIT: usize = 8000;
 
+/// Bytes read for a preview: a char is at most 4 bytes in any supported
+/// encoding, so this always holds more than `PREVIEW_CHAR_LIMIT` chars.
+const PREVIEW_READ_BYTES: u64 = 64 * 1024;
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewResult {
@@ -263,27 +268,29 @@ pub async fn preview_convert(
     client: tauri::State<'_, HttpClient>,
     params: ConvertFileParams,
 ) -> Result<PreviewResult, String> {
-    // Canonicalize, validate, and read the input — same guards as convert_file.
+    // Only the start of the file is shown, so only the start is read: a large
+    // file would cost a full read and decode on every click otherwise.
     let canonical = tokio::fs::canonicalize(&params.input_path)
         .await
         .map_err(|e| format!("INVALID_PATH:{e}"))?;
-    let metadata = tokio::fs::metadata(&canonical)
-        .await
-        .map_err(|e| format!("FILE_METADATA_FAILED:{e}"))?;
-    check_file_size(metadata.len())?;
-    let raw = tokio::fs::read(&canonical)
-        .await
-        .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
-    let (content, _) = decode_text(&raw)?;
+    let raw = tokio::task::spawn_blocking(move || {
+        let mut buf = Vec::new();
+        std::fs::File::open(&canonical)
+            .and_then(|f| f.take(PREVIEW_READ_BYTES).read_to_end(&mut buf))
+            .map(|_| buf)
+    })
+    .await
+    .map_err(|e| format!("FILE_READ_FAILED:{e}"))?
+    .map_err(|e| format!("FILE_READ_FAILED:{e}"))?;
+    let (content, _) = decode_text(trim_partial_utf8(&raw))?;
 
     // Only the preview window is sent to the API — a large file would be
     // rejected for body size and the extra text would just be discarded here.
-    let input_truncated = content.chars().count() > PREVIEW_CHAR_LIMIT;
-    let original: String = content.chars().take(PREVIEW_CHAR_LIMIT).collect();
+    let (original, input_truncated) = truncate_chars(&content, PREVIEW_CHAR_LIMIT);
 
     let data = convert_chunk(
         &client.0,
-        &original,
+        original,
         ConvertOptions {
             converter: &params.converter,
             pre_replace: &params.pre_replace,
@@ -295,13 +302,12 @@ pub async fn preview_convert(
     .await?;
 
     // Bopomofo/pinyin output can far exceed its input, so check both sides.
-    let truncated = input_truncated || data.text.chars().count() > PREVIEW_CHAR_LIMIT;
-    let converted: String = data.text.chars().take(PREVIEW_CHAR_LIMIT).collect();
+    let (converted, output_truncated) = truncate_chars(&data.text, PREVIEW_CHAR_LIMIT);
 
     Ok(PreviewResult {
-        original,
-        converted,
-        truncated,
+        original: original.to_string(),
+        converted: converted.to_string(),
+        truncated: input_truncated || output_truncated,
     })
 }
 
