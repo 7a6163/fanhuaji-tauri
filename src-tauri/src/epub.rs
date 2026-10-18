@@ -264,10 +264,12 @@ pub fn extract_text(kind: ContentKind, xml: &str) -> Result<(String, usize), Str
 }
 
 /// Replace the text nodes `extract_text` yields with converted text
-/// (split by delimiter).
+/// (split by delimiter). Fails with `EPUB_SEGMENT_MISMATCH` when the number of
+/// segments differs from the number of text nodes, since the text would then
+/// land in the wrong elements.
 pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<String, String> {
     let segments: Vec<&str> = converted.split(TEXT_DELIMITER).collect();
-    let mut seg_idx = 0;
+    let mut nodes = 0;
 
     let mut reader = Reader::from_str(xml);
     let mut scope = scope_for(kind);
@@ -279,12 +281,16 @@ pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<Str
                 let original = e
                     .unescape()
                     .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?;
-                if !original.trim().is_empty() && seg_idx < segments.len() {
-                    let new_text = BytesText::new(segments[seg_idx]);
+                let segment = if original.trim().is_empty() {
+                    None
+                } else {
+                    nodes += 1;
+                    segments.get(nodes - 1)
+                };
+                if let Some(segment) = segment {
                     writer
-                        .write_event(Event::Text(new_text))
+                        .write_event(Event::Text(BytesText::new(segment)))
                         .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
-                    seg_idx += 1;
                 } else {
                     writer
                         .write_event(Event::Text(e.into_owned()))
@@ -304,6 +310,10 @@ pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<Str
             }
             Err(e) => return Err(format!("XML_PARSE_FAILED:{e}")),
         }
+    }
+
+    if nodes != segments.len() {
+        return Err(format!("EPUB_SEGMENT_MISMATCH:{}/{nodes}", segments.len()));
     }
 
     let buf = writer.into_inner().into_inner();
@@ -640,14 +650,28 @@ mod tests {
 
     #[test]
     fn replace_text_empty_converted_string() {
-        // If there are no converted segments, whitespace-only nodes pass through
-        // and non-whitespace nodes are left as-is (seg_idx stays 0, segments
-        // is [""] which has length 1, so the first real text node gets "").
+        // "" splits into one empty segment, which replaces the single text node.
         let xhtml = r#"<html><body><p>原文</p></body></html>"#;
         let result = replace_text(ContentKind::Xhtml, xhtml, "").unwrap();
         // Should produce valid XML without panicking
         assert!(result.contains("<p>"));
         assert!(result.contains("</p>"));
+    }
+
+    #[test]
+    fn replace_text_rejects_too_few_segments() {
+        let xhtml = r#"<html><body><p>一</p><p>二</p><p>三</p></body></html>"#;
+        let converted = format!("壹{TEXT_DELIMITER}貳");
+        let err = replace_text(ContentKind::Xhtml, xhtml, &converted).unwrap_err();
+        assert_eq!(err, "EPUB_SEGMENT_MISMATCH:2/3");
+    }
+
+    #[test]
+    fn replace_text_rejects_too_many_segments() {
+        let xhtml = r#"<html><body><p>一</p></body></html>"#;
+        let converted = format!("壹{TEXT_DELIMITER}貳");
+        let err = replace_text(ContentKind::Xhtml, xhtml, &converted).unwrap_err();
+        assert_eq!(err, "EPUB_SEGMENT_MISMATCH:2/1");
     }
 
     #[test]

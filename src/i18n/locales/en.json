@@ -135,6 +135,7 @@
   "errors.EPUB_EXTRACT_FAILED": "Extraction error: {detail}",
   "errors.EPUB_REPACK_FAILED": "Repack error: {detail}",
   "errors.EPUB_PARTIAL_FAILED": "Some chapters failed ({detail})",
+  "errors.EPUB_SEGMENT_MISMATCH": "Converted text did not match the chapter's paragraphs ({detail})",
   "errors.XML_DECODE_FAILED": "XML decode error: {detail}",
   "errors.XML_PARSE_FAILED": "XML parse error: {detail}",
   "errors.XML_WRITE_FAILED": "XML write error: {detail}",
