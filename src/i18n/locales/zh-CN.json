@@ -62,6 +62,11 @@
   "module.auto": "自动",
   "module.enable": "启用",
   "module.disable": "停用",
+  "module.categoryUnknown": "未知",
+  "dialog.openFiles": "打开文件",
+  "dialog.supportedFiles": "支持的文件",
+  "dialog.allFiles": "所有文件",
+  "dialog.pickFolder": "选择输出文件夹",
 
   "settings.language.title": "语言",
 

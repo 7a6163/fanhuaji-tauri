@@ -287,7 +287,8 @@ fn parse_modules(data: &ServiceInfoData) -> Vec<ModuleInfo> {
             let category = category_names
                 .get(cat_id)
                 .cloned()
-                .unwrap_or_else(|| "未知".to_string());
+                // Empty: the frontend shows its own translated "unknown" label.
+                .unwrap_or_default();
             modules.push(ModuleInfo {
                 key: key.clone(),
                 name,
@@ -879,7 +880,7 @@ mod tests {
             module_categories: Some(serde_json::json!({})),
         };
         let modules = parse_modules(&data);
-        assert_eq!(modules[0].category, "未知");
+        assert_eq!(modules[0].category, "");
     }
 
     #[test]

@@ -30,30 +30,35 @@ pub async fn get_service_info(client: tauri::State<'_, HttpClient>) -> Result<Se
 }
 
 #[tauri::command]
-pub async fn pick_save_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    let path = app
-        .dialog()
-        .file()
-        .set_title("選擇輸出資料夾")
-        .blocking_pick_folder();
+pub async fn pick_save_folder(
+    app: tauri::AppHandle,
+    title: String,
+) -> Result<Option<String>, String> {
+    let path = app.dialog().file().set_title(title).blocking_pick_folder();
 
     Ok(path.map(|p| p.to_string()))
 }
 
+/// Dialog strings come from the frontend so they follow the UI language.
 #[tauri::command]
-pub async fn open_files_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+pub async fn open_files_dialog(
+    app: tauri::AppHandle,
+    title: String,
+    supported_label: String,
+    all_label: String,
+) -> Result<Vec<String>, String> {
     let paths = app
         .dialog()
         .file()
         .add_filter(
-            "支援檔案",
+            supported_label,
             &[
                 "txt", "srt", "ass", "ssa", "lrc", "vtt", "sub", "csv", "tsv", "json", "xml",
                 "html", "htm", "md", "epub",
             ],
         )
-        .add_filter("所有檔案", &["*"])
-        .set_title("開啟檔案")
+        .add_filter(all_label, &["*"])
+        .set_title(title)
         .blocking_pick_files();
 
     match paths {
