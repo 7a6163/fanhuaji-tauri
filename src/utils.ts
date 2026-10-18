@@ -34,6 +34,39 @@ export interface FileEntry {
   chapterName?: string;
 }
 
+export function fileExt(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
+/** The subtitle line on a file card, already HTML-escaped. */
+export function fileMessage(f: FileEntry): string {
+  // Success carries a message only when there were warnings (e.g. EPUB_PARTIAL_FAILED).
+  if (f.status === "success") return escHtml(f.message || t("file.convertDone"));
+  if (f.status === "converting") {
+    return f.chapterTotal
+      ? escHtml(
+          t("file.convertingChapter", {
+            current: String(f.chapterIndex),
+            total: String(f.chapterTotal),
+            name: f.chapterName ? ` ${f.chapterName}` : "",
+          }),
+        )
+      : escHtml(t("file.converting"));
+  }
+  if (f.status === "error") return escHtml(f.message);
+  // pending: show the format name as a neutral subtitle
+  return escHtml(fileExt(f.inputName).toUpperCase() || "—");
+}
+
+/**
+ * Whether a finished batch should start another: files dropped mid-batch stay
+ * pending because convertPending() bails while a batch is running.
+ */
+export function shouldResumeConversion(files: readonly FileEntry[], autoConvert: boolean): boolean {
+  return autoConvert && files.some((f) => f.status === "pending");
+}
+
 export function parseFilePath(path: string): { dir: string; name: string } {
   const parts = path.replace(/\\/g, "/").split("/");
   const name = parts.pop() ?? "";

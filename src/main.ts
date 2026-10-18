@@ -18,9 +18,12 @@ import {
   countByStatus,
   escHtml,
   type FileEntry,
+  fileExt,
+  fileMessage,
   isEpubFile,
   isSafeUrl,
   parseFilePath,
+  shouldResumeConversion,
 } from "./utils";
 
 interface EpubProgressPayload {
@@ -114,11 +117,6 @@ const BADGE_CLASS: Record<string, string> = {
   epub: "epub",
 };
 
-function fileExt(name: string): string {
-  const dot = name.lastIndexOf(".");
-  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
-}
-
 function formatBadge(name: string): string {
   const ext = fileExt(name);
   const cls = BADGE_CLASS[ext] ?? "";
@@ -140,24 +138,6 @@ function statusIcon(status: FileEntry["status"]): string {
 }
 
 // --- Render ---
-
-function fileMessage(f: FileEntry): string {
-  if (f.status === "success") return escHtml(t("file.convertDone"));
-  if (f.status === "converting") {
-    return f.chapterTotal
-      ? escHtml(
-          t("file.convertingChapter", {
-            current: String(f.chapterIndex),
-            total: String(f.chapterTotal),
-            name: f.chapterName ? ` ${f.chapterName}` : "",
-          }),
-        )
-      : escHtml(t("file.converting"));
-  }
-  if (f.status === "error") return escHtml(f.message);
-  // pending: show the format name as a neutral subtitle
-  return escHtml(fileExt(f.inputName).toUpperCase() || "—");
-}
 
 function render() {
   const isEmpty = files.length === 0;
@@ -191,7 +171,7 @@ function render() {
       ${formatBadge(f.inputName)}
       <div class="fc-body">
         <div class="fc-name" title="${escHtml(`${f.inputPath}/${f.inputName}`)}">${escHtml(f.inputName)}</div>
-        <div class="fc-meta">${fileMessage(f)}</div>
+        <div class="fc-meta" title="${f.status === "success" && f.message ? escHtml(f.message) : ""}">${fileMessage(f)}</div>
       </div>
       <div class="fc-status">${statusIcon(f.status)}</div>
     </div>`,
@@ -513,7 +493,7 @@ async function convertPending() {
                   ? t("file.convertDoneWithWarnings", {
                       warnings: translateError(result.warnings),
                     })
-                  : t("file.convertDone"),
+                  : "",
                 outputName: result.outputName,
                 outputPath: result.outputPath,
               }
@@ -535,6 +515,11 @@ async function convertPending() {
     isConverting = false;
     hideProgress();
   }
+
+  // Files added mid-batch were skipped by the isConverting guard: pick them up
+  // now, or re-render so the convert button reappears when auto-convert is off.
+  render();
+  if (shouldResumeConversion(files, isAutoConvert())) void convertPending();
 }
 
 // --- Settings drawer ---

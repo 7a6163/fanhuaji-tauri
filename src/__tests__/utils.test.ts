@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { t } from "../i18n/i18n";
 import {
   activateTab,
   buildModuleOverrides,
   countByStatus,
   escHtml,
   type FileEntry,
+  fileExt,
+  fileMessage,
   fileTooltip,
   isEpubFile,
   isSafeUrl,
   parseFilePath,
   removeCompleted,
   resetErrors,
+  shouldResumeConversion,
   statusDotHtml,
   statusLabel,
 } from "../utils";
@@ -122,6 +126,75 @@ function makeFile(overrides: Partial<FileEntry> = {}): FileEntry {
     ...overrides,
   };
 }
+
+describe("fileExt", () => {
+  it("returns the lower-cased extension", () => {
+    expect(fileExt("Book.EPUB")).toBe("epub");
+  });
+
+  it("uses the last dot", () => {
+    expect(fileExt("movie.zh.srt")).toBe("srt");
+  });
+
+  it("returns empty string without an extension", () => {
+    expect(fileExt("README")).toBe("");
+  });
+});
+
+describe("fileMessage", () => {
+  it("shows done for a success without warnings", () => {
+    expect(fileMessage(makeFile({ status: "success" }))).toBe(t("file.convertDone"));
+  });
+
+  it("shows the warning for a success with warnings", () => {
+    const f = makeFile({ status: "success", message: "轉換完成（部分章節失敗（3/40））" });
+    expect(fileMessage(f)).toBe("轉換完成（部分章節失敗（3/40））");
+  });
+
+  it("escapes the message", () => {
+    const f = makeFile({ status: "error", message: "<b>bad</b>" });
+    expect(fileMessage(f)).toBe("&lt;b&gt;bad&lt;/b&gt;");
+  });
+
+  it("shows chapter progress while converting an EPUB", () => {
+    const f = makeFile({
+      status: "converting",
+      chapterIndex: 2,
+      chapterTotal: 10,
+      chapterName: "ch02",
+    });
+    expect(fileMessage(f)).toBe(
+      escHtml(t("file.convertingChapter", { current: "2", total: "10", name: " ch02" })),
+    );
+  });
+
+  it("shows plain converting without chapter info", () => {
+    expect(fileMessage(makeFile({ status: "converting" }))).toBe(escHtml(t("file.converting")));
+  });
+
+  it("shows the format for a pending file", () => {
+    expect(fileMessage(makeFile({ inputName: "a.srt" }))).toBe("SRT");
+    expect(fileMessage(makeFile({ inputName: "noext" }))).toBe("—");
+  });
+});
+
+describe("shouldResumeConversion", () => {
+  const added = makeFile({ id: "added", status: "pending" });
+  const done = makeFile({ id: "done", status: "success" });
+
+  it("resumes when auto-convert is on and files are pending", () => {
+    expect(shouldResumeConversion([done, added], true)).toBe(true);
+  });
+
+  it("does not resume when auto-convert is off", () => {
+    expect(shouldResumeConversion([done, added], false)).toBe(false);
+  });
+
+  it("does not resume when nothing is pending", () => {
+    const failed = makeFile({ id: "failed", status: "error" });
+    expect(shouldResumeConversion([done, failed], true)).toBe(false);
+  });
+});
 
 describe("removeCompleted", () => {
   it("removes files with success status", () => {
