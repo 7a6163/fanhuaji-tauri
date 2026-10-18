@@ -65,23 +65,10 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
             .map_err(|e| format!("EPUB_READ_ENTRY_FAILED:{e}"))?;
         let name = entry.name().to_string();
 
-        if entry.is_dir() {
-            fs::create_dir_all(temp_dir.path().join(&name))
-                .map_err(|e| format!("DIR_CREATE_FAILED:{e}"))?;
-            continue;
-        }
-
-        // Reject entries whose declared uncompressed size exceeds the limit
-        // without spending CPU on decompression. The header is untrusted, so
-        // we also enforce the limit during the actual read below.
-        if entry.size() > MAX_ENTRY_BYTES {
-            return Err(format!("EPUB_ENTRY_TOO_LARGE:{name}"));
-        }
-
-        // Prevent ZIP path traversal. Path::starts_with is component-based
-        // and treats "/tmp/x/../evil" as prefixed by "/tmp/x", so it cannot
-        // catch ".." traversal on its own. Reject absolute paths and any
-        // entry whose components contain ParentDir ("..") or RootDir ("/").
+        // Prevent ZIP path traversal, for directory entries too. Path::starts_with
+        // is component-based and treats "/tmp/x/../evil" as prefixed by "/tmp/x",
+        // so it cannot catch ".." traversal on its own. Reject absolute paths and
+        // any entry whose components contain ParentDir ("..") or RootDir ("/").
         let rel = Path::new(&name);
         if rel.is_absolute()
             || rel
@@ -97,6 +84,18 @@ pub fn extract_epub(epub_path: &Path) -> Result<(TempDir, Vec<ContentFile>), Str
         // tempdir root (covers edge cases like Windows drive prefixes).
         if !out_path.starts_with(temp_dir.path()) {
             return Err(format!("EPUB_UNSAFE_PATH:{name}"));
+        }
+
+        if entry.is_dir() {
+            fs::create_dir_all(&out_path).map_err(|e| format!("DIR_CREATE_FAILED:{e}"))?;
+            continue;
+        }
+
+        // Reject entries whose declared uncompressed size exceeds the limit
+        // without spending CPU on decompression. The header is untrusted, so
+        // we also enforce the limit during the actual read below.
+        if entry.size() > MAX_ENTRY_BYTES {
+            return Err(format!("EPUB_ENTRY_TOO_LARGE:{name}"));
         }
 
         if let Some(parent) = out_path.parent() {
@@ -946,6 +945,29 @@ mod tests {
         assert!(
             msg.starts_with("EPUB_UNSAFE_PATH:"),
             "expected EPUB_UNSAFE_PATH error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn extract_epub_rejects_directory_traversal() {
+        // Directory entries were created before the traversal check ran.
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("pwned");
+        let name = format!("../../../../../../../..{}/", target.display());
+
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/epub+zip").unwrap();
+        zip.add_directory(name, stored).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+
+        let tmp = epub_tempfile(&bytes);
+        let msg = extract_epub(tmp.path()).unwrap_err();
+        assert!(msg.starts_with("EPUB_UNSAFE_PATH:"), "got: {msg}");
+        assert!(
+            !target.exists(),
+            "directory was created outside the temp dir"
         );
     }
 
