@@ -16,6 +16,7 @@ import { initUpdater } from "./updater";
 import {
   buildModuleOverrides,
   countByStatus,
+  createRequestGuard,
   escHtml,
   type FileEntry,
   fileExt,
@@ -190,6 +191,8 @@ const previewStats = $<HTMLDivElement>("#preview-stats");
 const previewBody = $<HTMLDivElement>("#preview-body");
 
 let selectedId: string | null = null;
+// A slow preview must not overwrite the one for a file selected after it.
+const previewGuard = createRequestGuard();
 
 interface PreviewResult {
   original: string;
@@ -199,6 +202,7 @@ interface PreviewResult {
 
 // Return the right pane to its empty state and clear the selection.
 function showEmptyPreview(): void {
+  previewGuard.invalidate();
   selectedId = null;
   previewPane.classList.add("hidden");
   previewEmpty.classList.remove("hidden");
@@ -325,6 +329,7 @@ function renderDiff(original: string, converted: string): { html: string; change
 }
 
 async function previewFile(file: FileEntry): Promise<void> {
+  const isCurrent = previewGuard.begin();
   const ext = fileExt(file.inputName);
   previewBadge.className = `fmt-badge ${BADGE_CLASS[ext] ?? ""}`;
   previewBadge.textContent = ext ? ext.toUpperCase().slice(0, 4) : "—";
@@ -363,12 +368,14 @@ async function previewFile(file: FileEntry): Promise<void> {
       modules: JSON.stringify(buildModuleOverrides(moduleSettings)),
     };
     const res = await invoke<PreviewResult>("preview_convert", { params });
+    if (!isCurrent()) return;
     const diff = renderDiff(res.original, res.converted);
     const chars = [...res.original].length;
     previewStats.textContent = `${t("preview.stats", { chars: String(chars), changed: String(diff.changedLines) })}${res.truncated ? ` · ${t("preview.truncated")}` : ""}`;
     previewBody.innerHTML =
       diff.html || `<div class="preview-loading">${escHtml(t("preview.empty"))}</div>`;
   } catch (err) {
+    if (!isCurrent()) return;
     previewStats.textContent = "";
     previewBody.innerHTML = `<div class="preview-error"><i class="ti ti-alert-triangle"></i> ${escHtml(translateError(String(err)))}</div>`;
   }

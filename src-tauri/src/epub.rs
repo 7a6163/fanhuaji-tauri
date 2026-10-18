@@ -171,42 +171,65 @@ fn find_content_files_recursive(
     Ok(())
 }
 
+/// Elements whose text is code, not prose: converting `<style>` would turn
+/// font names such as "宋体" into "宋體" and break the CSS.
+const XHTML_SKIP_ELEMENTS: &[&[u8]] = &[b"style", b"script"];
+
 /// Tracks whether the reader is inside an element whose text should be
-/// converted. With no element list every text node qualifies.
+/// converted: inside one of `include` (or anywhere when it is `None`) and not
+/// inside any of `exclude`.
 struct TextScope {
-    elements: Option<&'static [&'static [u8]]>,
-    depth: usize,
+    include: Option<&'static [&'static [u8]]>,
+    exclude: &'static [&'static [u8]],
+    include_depth: usize,
+    exclude_depth: usize,
+}
+
+/// Depth bookkeeping for "inside a matching element": once inside, every
+/// nested start tag deepens it; otherwise only a matching tag starts it.
+fn nest(depth: &mut usize, matches: bool) {
+    if *depth > 0 {
+        *depth += 1;
+    } else if matches {
+        *depth = 1;
+    }
+}
+
+fn matches_any(elements: &[&[u8]], name: &[u8]) -> bool {
+    elements.iter().any(|el| el.eq_ignore_ascii_case(name))
 }
 
 impl TextScope {
-    fn new(elements: Option<&'static [&'static [u8]]>) -> Self {
-        Self { elements, depth: 0 }
-    }
-
-    fn enter(&mut self, name: &[u8]) {
-        if self.depth > 0 {
-            self.depth += 1;
-        } else if self
-            .elements
-            .is_some_and(|els| els.iter().any(|el| el.eq_ignore_ascii_case(name)))
-        {
-            self.depth = 1;
+    fn new(include: Option<&'static [&'static [u8]]>, exclude: &'static [&'static [u8]]) -> Self {
+        Self {
+            include,
+            exclude,
+            include_depth: 0,
+            exclude_depth: 0,
         }
     }
 
+    fn enter(&mut self, name: &[u8]) {
+        let included = self.include.is_some_and(|els| matches_any(els, name));
+        nest(&mut self.include_depth, included);
+        nest(&mut self.exclude_depth, matches_any(self.exclude, name));
+    }
+
     fn leave(&mut self) {
-        self.depth = self.depth.saturating_sub(1);
+        self.include_depth = self.include_depth.saturating_sub(1);
+        self.exclude_depth = self.exclude_depth.saturating_sub(1);
     }
 
     fn active(&self) -> bool {
-        self.elements.is_none() || self.depth > 0
+        (self.include.is_none() || self.include_depth > 0) && self.exclude_depth == 0
     }
 }
 
 fn scope_for(kind: ContentKind) -> TextScope {
     match kind {
-        ContentKind::Opf => TextScope::new(Some(OPF_TEXT_ELEMENTS)),
-        ContentKind::Xhtml | ContentKind::Ncx => TextScope::new(None),
+        ContentKind::Opf => TextScope::new(Some(OPF_TEXT_ELEMENTS), &[]),
+        ContentKind::Xhtml => TextScope::new(None, XHTML_SKIP_ELEMENTS),
+        ContentKind::Ncx => TextScope::new(None, &[]),
     }
 }
 
@@ -241,10 +264,12 @@ pub fn extract_text(kind: ContentKind, xml: &str) -> Result<(String, usize), Str
 }
 
 /// Replace the text nodes `extract_text` yields with converted text
-/// (split by delimiter).
+/// (split by delimiter). Fails with `EPUB_SEGMENT_MISMATCH` when the number of
+/// segments differs from the number of text nodes, since the text would then
+/// land in the wrong elements.
 pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<String, String> {
     let segments: Vec<&str> = converted.split(TEXT_DELIMITER).collect();
-    let mut seg_idx = 0;
+    let mut nodes = 0;
 
     let mut reader = Reader::from_str(xml);
     let mut scope = scope_for(kind);
@@ -256,12 +281,16 @@ pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<Str
                 let original = e
                     .unescape()
                     .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?;
-                if !original.trim().is_empty() && seg_idx < segments.len() {
-                    let new_text = BytesText::new(segments[seg_idx]);
+                let segment = if original.trim().is_empty() {
+                    None
+                } else {
+                    nodes += 1;
+                    segments.get(nodes - 1)
+                };
+                if let Some(segment) = segment {
                     writer
-                        .write_event(Event::Text(new_text))
+                        .write_event(Event::Text(BytesText::new(segment)))
                         .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
-                    seg_idx += 1;
                 } else {
                     writer
                         .write_event(Event::Text(e.into_owned()))
@@ -281,6 +310,10 @@ pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<Str
             }
             Err(e) => return Err(format!("XML_PARSE_FAILED:{e}")),
         }
+    }
+
+    if nodes != segments.len() {
+        return Err(format!("EPUB_SEGMENT_MISMATCH:{}/{nodes}", segments.len()));
     }
 
     let buf = writer.into_inner().into_inner();
@@ -617,14 +650,55 @@ mod tests {
 
     #[test]
     fn replace_text_empty_converted_string() {
-        // If there are no converted segments, whitespace-only nodes pass through
-        // and non-whitespace nodes are left as-is (seg_idx stays 0, segments
-        // is [""] which has length 1, so the first real text node gets "").
+        // "" splits into one empty segment, which replaces the single text node.
         let xhtml = r#"<html><body><p>原文</p></body></html>"#;
         let result = replace_text(ContentKind::Xhtml, xhtml, "").unwrap();
         // Should produce valid XML without panicking
         assert!(result.contains("<p>"));
         assert!(result.contains("</p>"));
+    }
+
+    #[test]
+    fn replace_text_rejects_too_few_segments() {
+        let xhtml = r#"<html><body><p>一</p><p>二</p><p>三</p></body></html>"#;
+        let converted = format!("壹{TEXT_DELIMITER}貳");
+        let err = replace_text(ContentKind::Xhtml, xhtml, &converted).unwrap_err();
+        assert_eq!(err, "EPUB_SEGMENT_MISMATCH:2/3");
+    }
+
+    #[test]
+    fn replace_text_rejects_too_many_segments() {
+        let xhtml = r#"<html><body><p>一</p></body></html>"#;
+        let converted = format!("壹{TEXT_DELIMITER}貳");
+        let err = replace_text(ContentKind::Xhtml, xhtml, &converted).unwrap_err();
+        assert_eq!(err, "EPUB_SEGMENT_MISMATCH:2/1");
+    }
+
+    #[test]
+    fn xhtml_skips_style_and_script() {
+        let xhtml = r#"<html><head><title>标题</title><style>p{font-family:"宋体";}</style><script>var s="简体";</script></head><body><p>正文</p></body></html>"#;
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(
+            text.split(TEXT_DELIMITER).collect::<Vec<_>>(),
+            vec!["标题", "正文"]
+        );
+
+        let converted = format!("標題{TEXT_DELIMITER}正文");
+        let result = replace_text(ContentKind::Xhtml, xhtml, &converted).unwrap();
+        assert_eq!(
+            result,
+            xhtml.replace("<title>标题", "<title>標題"),
+            "style and script must be untouched"
+        );
+    }
+
+    #[test]
+    fn ncx_still_converts_every_text_node() {
+        // The style/script exclusion is XHTML-only.
+        let ncx = r#"<ncx><docTitle><text>书名</text></docTitle><style>不是样式</style></ncx>"#;
+        let (_, count) = extract_text(ContentKind::Ncx, ncx).unwrap();
+        assert_eq!(count, 2);
     }
 
     #[test]
