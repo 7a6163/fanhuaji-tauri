@@ -67,6 +67,24 @@ export function shouldResumeConversion(files: readonly FileEntry[], autoConvert:
   return autoConvert && files.some((f) => f.status === "pending");
 }
 
+/**
+ * Tracks overlapping async requests so only the latest one applies its result:
+ * call begin() per request and check the returned isCurrent() after awaiting.
+ */
+export function createRequestGuard() {
+  let latest = 0;
+  return {
+    begin(): () => boolean {
+      const id = ++latest;
+      return () => id === latest;
+    },
+    /** Make every in-flight request stale without starting a new one. */
+    invalidate(): void {
+      latest++;
+    },
+  };
+}
+
 export function parseFilePath(path: string): { dir: string; name: string } {
   const parts = path.replace(/\\/g, "/").split("/");
   const name = parts.pop() ?? "";

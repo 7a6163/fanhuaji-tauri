@@ -4,6 +4,7 @@ import {
   activateTab,
   buildModuleOverrides,
   countByStatus,
+  createRequestGuard,
   escHtml,
   type FileEntry,
   fileExt,
@@ -200,6 +201,38 @@ describe("shouldResumeConversion", () => {
   it("does not resume when nothing is pending", () => {
     const failed = makeFile({ id: "failed", status: "error" });
     expect(shouldResumeConversion([done, failed], true)).toBe(false);
+  });
+});
+
+describe("createRequestGuard", () => {
+  it("keeps a lone request current", () => {
+    const guard = createRequestGuard();
+    const isCurrent = guard.begin();
+    expect(isCurrent()).toBe(true);
+  });
+
+  it("makes an earlier request stale once a later one begins", () => {
+    // A slow preview of file A must not overwrite the preview of file B.
+    const guard = createRequestGuard();
+    const previewA = guard.begin();
+    const previewB = guard.begin();
+    expect(previewA()).toBe(false);
+    expect(previewB()).toBe(true);
+  });
+
+  it("invalidate makes every in-flight request stale", () => {
+    const guard = createRequestGuard();
+    const isCurrent = guard.begin();
+    guard.invalidate();
+    expect(isCurrent()).toBe(false);
+  });
+
+  it("keeps separate guards independent", () => {
+    const a = createRequestGuard();
+    const b = createRequestGuard();
+    const isCurrent = a.begin();
+    b.begin();
+    expect(isCurrent()).toBe(true);
   });
 });
 
