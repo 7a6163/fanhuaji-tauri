@@ -103,10 +103,6 @@
   "update.restarting": "下載完成，即將重新啟動…",
   "update.failed": "檢查更新失敗：{error}",
 
-  "status.pending": "待轉換",
-  "status.converting": "轉換中…",
-  "status.done": "完成",
-  "status.errorLabel": "錯誤",
 
   "errors.INVALID_PATH": "無效路徑：{detail}",
   "errors.FILE_METADATA_FAILED": "無法讀取檔案資訊：{detail}",

@@ -103,10 +103,6 @@
   "update.restarting": "Download complete, restarting\u2026",
   "update.failed": "Update check failed: {error}",
 
-  "status.pending": "Pending",
-  "status.converting": "Converting\u2026",
-  "status.done": "Done",
-  "status.errorLabel": "Error",
 
   "errors.INVALID_PATH": "Invalid path: {detail}",
   "errors.FILE_METADATA_FAILED": "Cannot read file metadata: {detail}",

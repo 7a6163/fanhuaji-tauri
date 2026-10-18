@@ -9,22 +9,10 @@ export function escHtml(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
-export function statusLabel(s: string): string {
-  const keyMap: Record<string, string> = {
-    pending: "status.pending",
-    converting: "status.converting",
-    success: "status.done",
-    error: "status.errorLabel",
-  };
-  const key = keyMap[s];
-  return key ? t(key) : s;
-}
-
 export interface FileEntry {
   id: string;
   inputPath: string;
   inputName: string;
-  encoding: string;
   status: "pending" | "converting" | "success" | "error";
   message: string;
   outputName: string;
@@ -92,10 +80,6 @@ export function parseFilePath(path: string): { dir: string; name: string } {
   return { dir, name };
 }
 
-export function removeCompleted(files: readonly FileEntry[]): FileEntry[] {
-  return files.filter((f) => f.status !== "success");
-}
-
 export function resetErrors(files: readonly FileEntry[]): FileEntry[] {
   return files.map((f) =>
     f.status === "error" ? { ...f, status: "pending" as const, message: "" } : f,
@@ -127,40 +111,8 @@ export function isSafeUrl(url: string): boolean {
   }
 }
 
-export function activateTab(name: string) {
-  document.querySelectorAll(".tab").forEach((t) => {
-    t.classList.remove("active");
-  });
-  document.querySelectorAll(".tab-panel").forEach((p) => {
-    p.classList.remove("active");
-  });
-  document.querySelector(`[data-tab="${name}"]`)?.classList.add("active");
-  document.getElementById(`tab-${name}`)?.classList.add("active");
-}
-
 export function isEpubFile(filename: string): boolean {
   return filename.toLowerCase().endsWith(".epub");
-}
-
-export function fileTooltip(file: FileEntry): string {
-  if (file.status === "success" && file.outputPath) {
-    return file.outputPath;
-  }
-  if (file.status === "error" && file.message) {
-    return file.message;
-  }
-  return "";
-}
-
-export function statusDotHtml(status: FileEntry["status"]): string {
-  const classMap: Record<FileEntry["status"], string> = {
-    pending: "pending",
-    converting: "converting",
-    success: "success",
-    error: "error",
-  };
-  const className = classMap[status] ?? "";
-  return `<span class="status-dot ${className}"></span>`;
 }
 
 export function buildModuleOverrides(settings: Record<string, string>): Record<string, number> {
