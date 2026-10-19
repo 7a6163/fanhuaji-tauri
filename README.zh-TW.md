@@ -20,6 +20,12 @@
 
 應用程式內建自動更新，啟動時會自動檢查新版本。
 
+### Homebrew（macOS）
+
+```bash
+brew install --cask 7a6163/tap/fanhuaji
+```
+
 ### macOS 首次開啟
 
 由於應用程式未經 Apple 簽名，macOS 會顯示「無法打開」的警告。請依以下步驟操作：

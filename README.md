@@ -20,6 +20,12 @@ Get the latest version from [Releases](https://github.com/7a6163/fanhuaji-tauri/
 
 The app updates itself: it checks for a new version on launch.
 
+### Homebrew (macOS)
+
+```bash
+brew install --cask 7a6163/tap/fanhuaji
+```
+
 ### Opening on macOS for the first time
 
 The app is not signed by Apple, so macOS will say it cannot be opened. To open it:
