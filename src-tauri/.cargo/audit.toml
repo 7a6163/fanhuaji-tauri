@@ -1,0 +1,7 @@
+[advisories]
+# zip: all three concern ZipArchive::extract() / ZipStreamReader::extract() (symlink
+# targets, permissions through symlinks, SUID/SGID bits). epub.rs never calls extract():
+# it reads entries one by one, rejects unsafe paths and writes plain files itself.
+# zip 4.x comes from tauri-plugin-updater, which only unpacks our own signed updates.
+# Revisit when bumping zip to >= 9 or when tauri-plugin-updater moves off zip 4.
+ignore = ["RUSTSEC-2026-0367", "RUSTSEC-2026-0368", "RUSTSEC-2026-0369"]
