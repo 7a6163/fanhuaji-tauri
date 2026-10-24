@@ -95,6 +95,11 @@ export function resetErrors(files: readonly FileEntry[]): FileEntry[] {
   );
 }
 
+/** Files whose Undo would be lost if they left the list: they overwrote an original. */
+export function countUndoable(files: readonly FileEntry[]): number {
+  return files.filter((f) => f.status === "success" && f.backupPath).length;
+}
+
 /** Drop finished files (converted or restored), keeping pending, running and failed ones. */
 export function removeCompleted(files: readonly FileEntry[]): FileEntry[] {
   return files.filter((f) => f.status !== "success" && f.status !== "restored");

@@ -3,6 +3,7 @@ import { t } from "../i18n/i18n";
 import {
   buildModuleOverrides,
   countByStatus,
+  countUndoable,
   createRequestGuard,
   escHtml,
   type FileEntry,
@@ -440,5 +441,18 @@ describe("removeCompleted", () => {
       makeFile({ id: "r", status: "restored" }),
     ];
     expect(removeCompleted(files).map((f) => f.id)).toEqual(["p", "c", "e"]);
+  });
+});
+
+describe("countUndoable", () => {
+  it("counts only converted files that still have a backup", () => {
+    const files = [
+      makeFile({ status: "success", backupPath: "/b/1" }),
+      makeFile({ status: "success", backupPath: "/b/2", message: "部分章節失敗" }),
+      makeFile({ status: "success" }),
+      makeFile({ status: "restored" }),
+      makeFile({ status: "error", backupPath: "/b/3" }),
+    ];
+    expect(countUndoable(files)).toBe(2);
   });
 });

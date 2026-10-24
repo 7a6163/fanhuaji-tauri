@@ -3,6 +3,7 @@
   "header.settings": "Settings",
 
   "drop.title": "Drop files here",
+  "drop.release": "Release to add files",
   "drop.shortcut": "or press {key} to choose files",
   "drop.subtitle": "or click to open files",
   "drop.formats": "Supports TXT, SRT, ASS, LRC, VTT, CSV, JSON, XML, HTML, MD, EPUB",
@@ -15,6 +16,7 @@
   "status.error": "Error:",
   "status.convert": "Convert",
   "status.clear": "Clear list",
+  "status.confirmClear": "Click again: {count} can't be undone",
   "status.clearDone": "Clear finished",
   "status.stop": "Stop",
   "status.stopTitle": "Stop after the current file",
@@ -106,6 +108,7 @@
   "file.restored": "Original restored",
   "file.undo": "Undo",
   "file.remove": "Remove from list",
+  "file.removeConfirm": "Click again to remove; the original can't be restored",
   "file.undoTitle": "Put the original file back (until you quit the app)",
   "file.convertDoneWithWarnings": "Done ({warnings})",
   "file.converting": "Converting\u2026",

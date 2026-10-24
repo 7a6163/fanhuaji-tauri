@@ -16,6 +16,7 @@ import { initUpdater } from "./updater";
 import {
   buildModuleOverrides,
   countByStatus,
+  countUndoable,
   createRequestGuard,
   type DiffSeg,
   escHtml,
@@ -107,6 +108,7 @@ const convertCount = $<HTMLSpanElement>("#convert-count");
 const statusMode = $<HTMLSpanElement>("#status-mode");
 const autoConvertCheckbox = $<HTMLInputElement>("#auto-convert");
 const srStatus = $<HTMLDivElement>("#sr-status");
+const dropOverlay = $<HTMLDivElement>("#drop-overlay");
 
 // --- Auto-convert ---
 
@@ -159,6 +161,30 @@ function statusIcon(f: FileEntry): string {
 
 // --- Render ---
 
+// Clearing a file that overwrote its original takes its Undo away. Such a clear needs
+// a second click within a few seconds; until then the button says what would be lost.
+// Holds "all", "done" or a file id while armed.
+let armedClear: string | null = null;
+let armTimer: ReturnType<typeof setTimeout> | undefined;
+
+function confirmUndoLoss(key: string, leaving: readonly FileEntry[]): boolean {
+  const count = countUndoable(leaving);
+  if (count === 0 || armedClear === key) {
+    armedClear = null;
+    clearTimeout(armTimer);
+    return true;
+  }
+  armedClear = key;
+  clearTimeout(armTimer);
+  armTimer = setTimeout(() => {
+    armedClear = null;
+    render();
+  }, 4000);
+  render();
+  announce(t("status.confirmClear", { count: String(count) }));
+  return false;
+}
+
 // Card subtitles are one truncated line; the tooltip carries the full text.
 function metaTitle(f: FileEntry): string {
   if (f.status === "error") return f.message;
@@ -199,6 +225,18 @@ function render() {
   countError.textContent = String(counts.error);
   // Clearing mid-batch would hide files the running loop is still writing.
   clearBtn.disabled = isConverting;
+  const armedText = (key: string, leaving: readonly FileEntry[], label: string) =>
+    armedClear === key
+      ? t("status.confirmClear", { count: String(countUndoable(leaving)) })
+      : t(label);
+  clearBtn.textContent = armedText("all", files, "status.clear");
+  clearBtn.classList.toggle("is-armed", armedClear === "all");
+  clearDoneBtn.textContent = armedText(
+    "done",
+    files.filter((f) => !removeCompleted([f]).length),
+    "status.clearDone",
+  );
+  clearDoneBtn.classList.toggle("is-armed", armedClear === "done");
   stopBtn.classList.toggle("hidden", !isConverting);
   stopBtn.disabled = stopRequested;
   const doneCount = files.length - removeCompleted(files).length;
@@ -235,7 +273,9 @@ function render() {
       }${statusIcon(f)}${
         f.status === "converting"
           ? ""
-          : `<button type="button" class="fc-remove" data-remove="${escHtml(f.id)}" title="${escHtml(t("file.remove"))}" aria-label="${escHtml(t("file.remove"))}"><i aria-hidden="true" class="ti ti-x"></i></button>`
+          : armedClear === f.id
+            ? `<button type="button" class="fc-remove is-armed" data-remove="${escHtml(f.id)}" title="${escHtml(t("file.removeConfirm"))}" aria-label="${escHtml(t("file.removeConfirm"))}"><i aria-hidden="true" class="ti ti-alert-triangle"></i></button>`
+            : `<button type="button" class="fc-remove" data-remove="${escHtml(f.id)}" title="${escHtml(t("file.remove"))}" aria-label="${escHtml(t("file.remove"))}"><i aria-hidden="true" class="ti ti-x"></i></button>`
       }</div>
     </div>`,
     )
@@ -1137,17 +1177,22 @@ stopBtn.addEventListener("click", () => {
 });
 
 clearDoneBtn.addEventListener("click", () => {
+  const leaving = files.filter((f) => !removeCompleted([f]).length);
+  if (!confirmUndoLoss("done", leaving)) return;
   files = removeCompleted(files);
   render();
 });
 
 /** Remove one file from the queue; the file being converted stays. */
 function removeFile(id: string): void {
+  const target = files.filter((f) => f.id === id);
+  if (!confirmUndoLoss(id, target)) return;
   files = files.filter((f) => f.id !== id || f.status === "converting");
   render();
 }
 
 clearBtn.addEventListener("click", () => {
+  if (!confirmUndoLoss("all", files)) return;
   files = [];
   render();
 });
@@ -1176,15 +1221,12 @@ document.querySelectorAll<HTMLAnchorElement>("a[data-href]").forEach((a) => {
 
 void getCurrentWebviewWindow().onDragDropEvent((event) => {
   const { type } = event.payload;
-  if (type === "enter" || type === "over") {
-    dropZone.classList.add("drag-over");
-  } else if (type === "drop") {
-    dropZone.classList.remove("drag-over");
-    if ("paths" in event.payload) {
-      addFiles(event.payload.paths);
-    }
-  } else if (type === "leave") {
-    dropZone.classList.remove("drag-over");
+  // The whole window is a drop target, so the whole window answers the drag.
+  const dragging = type === "enter" || type === "over";
+  dropZone.classList.toggle("drag-over", dragging);
+  dropOverlay.classList.toggle("visible", dragging);
+  if (type === "drop" && "paths" in event.payload) {
+    addFiles(event.payload.paths);
   }
 });
 

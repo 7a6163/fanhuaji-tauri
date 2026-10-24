@@ -507,6 +507,9 @@ html[lang="en"] .brand-sub { display: none; }
 .file-card.can-remove:focus-within .fc-remove { display: grid; }
 .file-card.can-remove:hover .status-icon,
 .file-card.can-remove:focus-within .status-icon { display: none; }
+.fc-remove.is-armed { display: grid; color: var(--accent); background: var(--accent-weak); }
+.file-card:has(.fc-remove.is-armed) .status-icon { display: none; }
+.status-action.is-armed { color: var(--accent); background: var(--accent-weak); font-weight: 600; }
 .fc-undo:disabled { opacity: 0.5; cursor: default; }
 
 /* Right: live preview */
@@ -1254,3 +1257,31 @@ textarea:focus {
 @keyframes pulse {
   50% { opacity: 0.4; }
 }
+
+/* Whole-window drop target, shown while files are dragged over the window. */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  padding: 14px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease-out;
+}
+.drop-overlay.visible { opacity: 1; }
+.drop-overlay-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 600;
+}
+.drop-overlay-frame .ti { font-size: 40px; }
