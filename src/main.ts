@@ -26,6 +26,7 @@ import {
   isEpubFile,
   isSafeUrl,
   parseFilePath,
+  removeCompleted,
   resetErrors,
   shouldResumeConversion,
 } from "./utils";
@@ -66,6 +67,10 @@ const STORAGE_KEYS = {
 
 let files: FileEntry[] = [];
 let isConverting = false;
+// Set by the Stop button; the batch loop exits before starting its next file.
+let stopRequested = false;
+// The last batch was stopped: keep the convert button up even with auto-convert on.
+let batchStopped = false;
 let moduleData: ModuleInfo[] = [];
 let moduleSettings: Record<string, string> = JSON.parse(
   localStorage.getItem(STORAGE_KEYS.modules) ?? "{}",
@@ -94,6 +99,8 @@ const countError = $<HTMLSpanElement>("#count-error");
 const countWarning = $<HTMLSpanElement>("#count-warning");
 const warningStat = $<HTMLSpanElement>("#stat-warning");
 const clearBtn = $<HTMLButtonElement>("#btn-clear");
+const clearDoneBtn = $<HTMLButtonElement>("#btn-clear-done");
+const stopBtn = $<HTMLButtonElement>("#btn-stop");
 const retryBtn = $<HTMLButtonElement>("#btn-retry");
 const convertBtn = $<HTMLButtonElement>("#btn-convert");
 const convertCount = $<HTMLSpanElement>("#convert-count");
@@ -172,9 +179,12 @@ function render() {
   const hasErrors = files.some((f) => f.status === "error");
   retryBtn.classList.toggle("hidden", !hasErrors);
 
-  // Show convert button when auto-convert is off and there are pending files
+  // Show convert button when auto-convert is off (or the last batch was stopped) and files are pending
   const hasPending = files.some((f) => f.status === "pending");
-  convertBtn.classList.toggle("hidden", isAutoConvert() || !hasPending || isConverting);
+  convertBtn.classList.toggle(
+    "hidden",
+    (isAutoConvert() && !batchStopped) || !hasPending || isConverting,
+  );
 
   // Counts
   const counts = countByStatus(files);
@@ -185,6 +195,11 @@ function render() {
   countError.textContent = String(counts.error);
   // Clearing mid-batch would hide files the running loop is still writing.
   clearBtn.disabled = isConverting;
+  stopBtn.classList.toggle("hidden", !isConverting);
+  stopBtn.disabled = stopRequested;
+  const doneCount = files.length - removeCompleted(files).length;
+  // Only worth a button when it clears less than "Clear list" would.
+  clearDoneBtn.classList.toggle("hidden", doneCount === 0 || doneCount === files.length);
   convertCount.textContent = counts.pending ? `(${counts.pending})` : "";
 
   // innerHTML replaces the cards, so put keyboard focus back where it was.
@@ -197,7 +212,7 @@ function render() {
   fileItems.innerHTML = files
     .map(
       (f) => `
-    <div class="file-card${f.id === selectedId ? " is-selected" : ""}" role="listitem" data-id="${escHtml(f.id)}">
+    <div class="file-card${f.id === selectedId ? " is-selected" : ""}${f.status === "converting" ? "" : " can-remove"}" role="listitem" data-id="${escHtml(f.id)}">
       <button type="button" class="fc-main"${f.id === selectedId ? ' aria-current="true"' : ""}>
         ${formatBadge(f.inputName)}
         <span class="fc-body">
@@ -213,7 +228,11 @@ function render() {
         f.status === "success" && f.outputPath
           ? `<button type="button" class="fc-reveal" data-reveal="${escHtml(f.id)}" title="${escHtml(t("file.reveal"))}" aria-label="${escHtml(t("file.reveal"))}"><i aria-hidden="true" class="ti ti-folder-open"></i></button>`
           : ""
-      }${statusIcon(f)}</div>
+      }${statusIcon(f)}${
+        f.status === "converting"
+          ? ""
+          : `<button type="button" class="fc-remove" data-remove="${escHtml(f.id)}" title="${escHtml(t("file.remove"))}" aria-label="${escHtml(t("file.remove"))}"><i aria-hidden="true" class="ti ti-x"></i></button>`
+      }</div>
     </div>`,
     )
     .join("");
@@ -508,13 +527,21 @@ async function convertPending() {
 
   const totalPending = pendingFiles.length;
   let completedCount = 0;
+  let stopped = false;
 
   isConverting = true;
+  batchStopped = false;
   if (progressTimeout) clearTimeout(progressTimeout);
   showProgress(0);
 
   try {
     for (const file of pendingFiles) {
+      if (stopRequested) break;
+      // Removed from the queue since the batch started.
+      if (!files.some((f) => f.id === file.id && f.status === "pending")) {
+        completedCount++;
+        continue;
+      }
       files = files.map((f) =>
         f.id === file.id ? { ...f, status: "converting" as const, message: "" } : f,
       );
@@ -559,6 +586,9 @@ async function convertPending() {
     }
   } finally {
     isConverting = false;
+    stopped = stopRequested;
+    batchStopped = stopped;
+    stopRequested = false;
     hideProgress();
     const c = countByStatus(files);
     announce(
@@ -573,7 +603,8 @@ async function convertPending() {
   // Files added mid-batch were skipped by the isConverting guard: pick them up
   // now, or re-render so the convert button reappears when auto-convert is off.
   render();
-  if (shouldResumeConversion(files, isAutoConvert())) void convertPending();
+  // A stopped batch leaves its files pending on purpose; don't restart it.
+  if (!stopped && shouldResumeConversion(files, isAutoConvert())) void convertPending();
 }
 
 // --- Settings drawer ---
@@ -607,6 +638,11 @@ $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings)
 
 // Click a file card to load its diff preview in the right pane
 fileItems.addEventListener("click", async (e) => {
+  const remove = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-remove]");
+  if (remove) {
+    removeFile(remove.dataset.remove ?? "");
+    return;
+  }
   const reveal = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-reveal]");
   if (reveal) {
     const file = files.find((f) => f.id === reveal.dataset.reveal);
@@ -649,31 +685,99 @@ fileItems.addEventListener("click", async (e) => {
 
 // Up/Down move between cards; Tab still reaches each card's own buttons.
 fileItems.addEventListener("keydown", (e) => {
-  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const card = (e.target as HTMLElement).closest<HTMLElement>(".file-card");
   const mains = [...fileItems.querySelectorAll<HTMLElement>(".fc-main")];
-  const current = (e.target as HTMLElement).closest(".file-card")?.querySelector(".fc-main");
-  const i = mains.indexOf(current as HTMLElement);
+  const i = mains.indexOf(card?.querySelector(".fc-main") as HTMLElement);
   if (i < 0) return;
+  // Delete/Backspace removes the focused card and moves focus to its neighbour.
+  if ((e.key === "Delete" || e.key === "Backspace") && card?.classList.contains("can-remove")) {
+    e.preventDefault();
+    removeFile(card.dataset.id ?? "");
+    const rest = [...fileItems.querySelectorAll<HTMLElement>(".fc-main")];
+    rest[Math.min(i, rest.length - 1)]?.focus();
+    return;
+  }
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   e.preventDefault();
   mains[Math.max(0, Math.min(mains.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))]?.focus();
 });
 
-// Toolbar mode segmented control — drives the same converter as Settings.
+/**
+ * Toolbar popover: toggles from its button, moves between options with the arrow
+ * keys, and closes on Escape, an outside click, or focus leaving it.
+ */
+function wirePopover(btn: HTMLButtonElement, pop: HTMLElement, onPick: (opt: HTMLElement) => void) {
+  const wrap = btn.parentElement as HTMLElement;
+  const close = () => {
+    pop.classList.add("hidden");
+    btn.setAttribute("aria-expanded", "false");
+  };
+  btn.addEventListener("click", () => {
+    const nowHidden = pop.classList.toggle("hidden");
+    btn.setAttribute("aria-expanded", String(!nowHidden));
+    if (!nowHidden) pop.querySelector<HTMLElement>('.out-opt[aria-checked="true"]')?.focus();
+  });
+  pop.addEventListener("keydown", (e) => {
+    const opts = [...pop.querySelectorAll<HTMLElement>(".out-opt")];
+    const i = opts.indexOf(document.activeElement as HTMLElement);
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && i >= 0) {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      opts[(i + step + opts.length) % opts.length]?.focus();
+    } else if (e.key === "Escape") {
+      close();
+      btn.focus();
+    }
+  });
+  pop.addEventListener("click", (e) => {
+    const opt = (e.target as HTMLElement).closest<HTMLElement>(".out-opt");
+    if (opt) onPick(opt);
+  });
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target as Node)) close();
+  });
+  // Only close when focus lands somewhere else (Tab). WebKit does not focus buttons on
+  // click, so a click inside blurs with no relatedTarget; outside clicks are handled above.
+  wrap.addEventListener("focusout", (e) => {
+    const next = e.relatedTarget as Node | null;
+    if (next && !wrap.contains(next)) close();
+  });
+  return close;
+}
+
+// Toolbar mode control: the four common converters, the rest under "More".
+// The hidden #converter select holds the value for convert params and persistence.
 const modeSeg = $<HTMLDivElement>("#mode-seg");
 const converterSelect = $<HTMLSelectElement>("#converter");
+const modeMoreBtn = $<HTMLButtonElement>("#mode-more-btn");
+const modeMoreLabel = $<HTMLSpanElement>("#mode-more-label");
+const modePop = $<HTMLDivElement>("#mode-pop");
 function syncModeSeg(): void {
-  for (const b of modeSeg.querySelectorAll<HTMLButtonElement>("button[data-converter]")) {
-    b.setAttribute("aria-pressed", String(b.dataset.converter === converterSelect.value));
+  const value = converterSelect.value;
+  let common = false;
+  for (const b of modeSeg.querySelectorAll<HTMLButtonElement>(":scope > button[data-converter]")) {
+    const on = b.dataset.converter === value;
+    b.setAttribute("aria-pressed", String(on));
+    common ||= on;
   }
+  for (const opt of modePop.querySelectorAll<HTMLElement>(".out-opt")) {
+    opt.setAttribute("aria-checked", String(opt.dataset.converter === value));
+  }
+  // A converter from the menu takes over the More button so the choice stays visible.
+  modeMoreBtn.setAttribute("aria-pressed", String(!common));
+  modeMoreLabel.textContent = common ? t("converter.more") : t(`converter.short.${value}`);
 }
 modeSeg.addEventListener("click", (e) => {
-  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-converter]");
+  const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-converter]");
   if (!btn) return;
   converterSelect.value = btn.dataset.converter ?? "Taiwan";
   converterSelect.dispatchEvent(new Event("change"));
 });
-// Keep the segmented state in sync and re-preview when the converter changes
-// (whether from the segmented control or the Settings drawer).
+const closeModePop = wirePopover(modeMoreBtn, modePop, () => {
+  closeModePop();
+  modeMoreBtn.focus();
+});
+// Keep the toolbar and status bar in sync and re-preview when the converter changes.
 function syncStatusMode(): void {
   statusMode.textContent = converterSelect.selectedOptions[0]?.text ?? "";
 }
@@ -690,62 +794,54 @@ converterSelect.addEventListener("change", () => {
 syncModeSeg();
 syncStatusMode();
 
-// Toolbar output-naming pill — custom popover bound to the Settings naming select.
+// Toolbar output pill: naming, suffix and save folder all live in its popover,
+// bound to the hidden #naming and #save-folder selects.
 const namingSelect = $<HTMLSelectElement>("#naming");
 const outPillBtn = $<HTMLButtonElement>("#out-pill-btn");
 const outPillLabel = $<HTMLSpanElement>("#out-pill-label");
 const outPop = $<HTMLDivElement>("#out-pop");
+const folderPath = $<HTMLDivElement>("#oo-folder-path");
 
 function syncOutPill(): void {
-  for (const opt of outPop.querySelectorAll<HTMLButtonElement>(".out-opt")) {
-    const on = opt.dataset.naming === namingSelect.value;
+  const folderSelect = document.getElementById("save-folder") as HTMLSelectElement | null;
+  const folder = folderSelect && folderSelect.value !== "same" ? folderSelect.value : "";
+  let naming = "";
+  for (const opt of outPop.querySelectorAll<HTMLElement>(".out-opt")) {
+    const on = opt.dataset.naming
+      ? opt.dataset.naming === namingSelect.value
+      : opt.dataset.folder === (folder ? "custom" : "same");
     opt.setAttribute("aria-checked", String(on));
-    if (on) outPillLabel.textContent = opt.querySelector(".oo-title")?.textContent ?? "";
+    if (on && opt.dataset.naming) naming = opt.querySelector(".oo-title")?.textContent ?? "";
   }
+  folderPath.textContent = folder || t("settings.save.pickFolder");
+  folderPath.title = folder;
+  // Name the destination in the pill when it is not next to the input file.
+  const base = folder.split(/[\\/]/).filter(Boolean).pop();
+  outPillLabel.textContent = base ? `${naming} · ${base}` : naming;
   // The label is hidden in narrow windows; keep the button's name and tooltip.
-  outPillBtn.setAttribute("aria-label", outPillLabel.textContent ?? "");
-  outPillBtn.title = outPillLabel.textContent ?? "";
+  const full = folder ? `${naming} · ${folder}` : naming;
+  outPillBtn.setAttribute("aria-label", full);
+  outPillBtn.title = full;
   outPillBtn.classList.toggle("is-overwrite", namingSelect.value === "overwrite");
 }
-function closeOutPop(): void {
-  outPop.classList.add("hidden");
-  outPillBtn.setAttribute("aria-expanded", "false");
-}
-outPillBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
-  const nowHidden = outPop.classList.toggle("hidden");
-  outPillBtn.setAttribute("aria-expanded", String(!nowHidden));
-  if (!nowHidden) outPop.querySelector<HTMLElement>('.out-opt[aria-checked="true"]')?.focus();
-});
-outPop.addEventListener("keydown", (e) => {
-  const opts = [...outPop.querySelectorAll<HTMLElement>(".out-opt")];
-  const i = opts.indexOf(document.activeElement as HTMLElement);
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-    e.preventDefault();
-    const step = e.key === "ArrowDown" ? 1 : -1;
-    opts[(i + step + opts.length) % opts.length]?.focus();
-  } else if (e.key === "Escape" || e.key === "Tab") {
-    closeOutPop();
-    if (e.key === "Escape") outPillBtn.focus();
+const closeOutPop = wirePopover(outPillBtn, outPop, (opt) => {
+  if (opt.dataset.naming) {
+    namingSelect.value = opt.dataset.naming;
+    namingSelect.dispatchEvent(new Event("change"));
+    // Suffix stays open so the suffix can be typed right away.
+    if (opt.dataset.naming === "suffix") {
+      document.getElementById("custom-suffix")?.focus();
+      return;
+    }
+  } else if (opt.dataset.folder) {
+    const folderSelect = document.getElementById("save-folder") as HTMLSelectElement | null;
+    if (!folderSelect) return;
+    // "custom" opens the folder picker every time, so it doubles as "change folder".
+    folderSelect.value = opt.dataset.folder;
+    folderSelect.dispatchEvent(new Event("change"));
   }
-});
-outPop.addEventListener("click", (e) => {
-  const opt = (e.target as HTMLElement).closest<HTMLButtonElement>(".out-opt");
-  if (!opt) return;
-  namingSelect.value = opt.dataset.naming ?? "auto";
-  namingSelect.dispatchEvent(new Event("change"));
   closeOutPop();
-});
-document.addEventListener("click", (e) => {
-  if (
-    !outPop.classList.contains("hidden") &&
-    !(e.target as HTMLElement).closest(".out-pill-wrap")
-  ) {
-    closeOutPop();
-  }
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeOutPop();
+  outPillBtn.focus();
 });
 namingSelect.addEventListener("change", syncOutPill);
 syncOutPill();
@@ -845,6 +941,7 @@ function setCustomFolder(folder: string) {
   customOpt.textContent = folder;
   saveFolderSelect.value = folder;
   localStorage.setItem(SAVE_FOLDER_KEY, folder);
+  syncOutPill();
 }
 
 // Restore saved custom folder
@@ -868,6 +965,7 @@ saveFolderSelect?.addEventListener("change", async () => {
   } else if (saveFolderSelect.value === "same") {
     localStorage.removeItem(SAVE_FOLDER_KEY);
   }
+  syncOutPill();
 });
 
 // Drawer tabs
@@ -996,6 +1094,22 @@ dropZone.addEventListener("keydown", (e) => {
 
 $<HTMLButtonElement>("#btn-add-more").addEventListener("click", openFiles);
 
+stopBtn.addEventListener("click", () => {
+  stopRequested = true;
+  render();
+});
+
+clearDoneBtn.addEventListener("click", () => {
+  files = removeCompleted(files);
+  render();
+});
+
+/** Remove one file from the queue; the file being converted stays. */
+function removeFile(id: string): void {
+  files = files.filter((f) => f.id !== id || f.status === "converting");
+  render();
+}
+
 clearBtn.addEventListener("click", () => {
   files = [];
   render();
@@ -1089,6 +1203,7 @@ if (localeSelect) {
   localeSelect.addEventListener("change", () => {
     setLocale(localeSelect.value as Locale);
     applyShortcutHints();
+    syncModeSeg();
     // The status bar copies the converter <option> text, which translatePage() just changed.
     syncStatusMode();
     render();
