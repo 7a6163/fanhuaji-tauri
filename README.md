@@ -5,7 +5,13 @@ English | [正體中文](README.zh-TW.md)
 [![CI](https://github.com/fanhuaji-desktop/fanhuaji-tauri/actions/workflows/ci.yml/badge.svg)](https://github.com/fanhuaji-desktop/fanhuaji-tauri/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/fanhuaji-desktop/fanhuaji-tauri/graph/badge.svg?token=jMGZhG2lpa)](https://codecov.io/gh/fanhuaji-desktop/fanhuaji-tauri)
 
-A desktop app for converting Chinese text between Traditional and Simplified, built with Tauri 2 and powered by the [zhconvert.org](https://zhconvert.org) API.
+A desktop app for converting subtitles, documents and EPUB books between Traditional and Simplified Chinese, built with Tauri 2 and powered by the [Fanhuaji (zhconvert.org)](https://zhconvert.org) API.
+
+> This is a third-party client, not an official Fanhuaji product.
+
+**Website:** <https://fanhuaji-desktop.github.io/en/>
+
+![The Fanhuaji window: converted subtitle files on the left, the original and the Taiwan conversion compared line by line on the right](docs/screenshot.webp)
 
 ## Download
 
@@ -14,11 +20,11 @@ Get the latest version from [Releases](https://github.com/fanhuaji-desktop/fanhu
 | Platform | Architecture | Format |
 |----------|--------------|--------|
 | macOS | Universal (Apple Silicon + Intel) | `.dmg` |
-| Windows | x86_64 | `.exe` (NSIS) |
+| Windows | x86_64 | `.exe` (NSIS installer) / portable `.zip` |
 | Linux | x86_64 | `.AppImage` / `.deb` |
 | Linux | ARM64 (aarch64) | `.AppImage` / `.deb` |
 
-The app updates itself: it checks for a new version on launch.
+The app updates itself: it checks for a new version on launch. The Windows portable build does not update itself; it only tells you when a new version is out.
 
 ### Homebrew (macOS)
 
@@ -53,6 +59,10 @@ WEBKIT_DISABLE_DMABUF_RENDERER=1 ./Fanhuaji.AppImage
 - Drag and drop files to convert them automatically, no clicks needed
 - Supports txt, srt, ass, lrc, vtt, csv, json, xml, html, md, and **epub**
 - EPUB conversion chapter by chapter, keeping structure, CSS, and images
+- Line-by-line preview of the original and the result, with every change marked
+- Overwriting the original backs it up first, so **Undo** can put it back until you quit
+- Stop a batch in progress; remove single files or clear finished ones
+- Keyboard-friendly: move through files with the arrow keys, ⌘/Ctrl+O to add files, ⌘/Ctrl+Enter to convert
 - Multiple conversion modes: Traditional, Simplified, Taiwan, Hong Kong, China, Bopomofo, Pinyin, and more
 - Dictionary module settings (auto-detect / enabled / disabled)
 - Custom replacement rules (pre-conversion, post-conversion, protected terms)
@@ -83,11 +93,15 @@ npm run tauri dev
 
 # Production build
 npm run tauri build
+
+# Checks and tests (what CI runs)
+npm run check && npm test
+cd src-tauri && cargo clippy -- -D warnings && cargo fmt --check && cargo test
 ```
 
 ### Releasing a new version
 
-1. Bump the version:
+1. Move the `[Unreleased]` notes in `CHANGELOG.md` under the new version, then bump the version:
 
 ```bash
 # Updates package.json, package-lock.json, src-tauri/tauri.conf.json, and src-tauri/Cargo.toml together
@@ -101,16 +115,6 @@ git push && git push --tags
 ```
 
 GitHub Actions builds every platform and creates the Release (including `latest.json` for auto-update).
-
-### Manual release
-
-```bash
-# Build
-TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/fanhuaji.key)" npm run tauri build
-
-# Create the GitHub Release
-gh release create v1.x.x src-tauri/target/release/bundle/dmg/*.dmg --title "v1.x.x"
-```
 
 ## Tech stack
 

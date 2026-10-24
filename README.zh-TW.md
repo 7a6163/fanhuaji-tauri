@@ -5,7 +5,13 @@
 [![CI](https://github.com/fanhuaji-desktop/fanhuaji-tauri/actions/workflows/ci.yml/badge.svg)](https://github.com/fanhuaji-desktop/fanhuaji-tauri/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/fanhuaji-desktop/fanhuaji-tauri/graph/badge.svg?token=jMGZhG2lpa)](https://codecov.io/gh/fanhuaji-desktop/fanhuaji-tauri)
 
-使用 Tauri 2 撰寫的中文繁簡轉換桌面應用程式，使用 [zhconvert.org](https://zhconvert.org) API。
+字幕、文件、EPUB 電子書的繁簡轉換桌面應用程式，以 Tauri 2 撰寫，轉換服務由[繁化姬（zhconvert.org）](https://zhconvert.org) API 提供。
+
+> 這是第三方用戶端，並非繁化姬官方產品。
+
+**官網：** <https://fanhuaji-desktop.github.io/>
+
+![繁化姬視窗：左邊是已轉換的字幕檔，右邊逐句對照原文與台灣化的結果](docs/screenshot.zh-TW.webp)
 
 ## 下載
 
@@ -14,11 +20,11 @@
 | 平台 | 架構 | 格式 |
 |------|------|------|
 | macOS | Universal (Apple Silicon + Intel) | `.dmg` |
-| Windows | x86_64 | `.exe` (NSIS) |
+| Windows | x86_64 | `.exe`（NSIS 安裝程式）/ 免安裝版 `.zip` |
 | Linux | x86_64 | `.AppImage` / `.deb` |
 | Linux | ARM64 (aarch64) | `.AppImage` / `.deb` |
 
-應用程式內建自動更新，啟動時會自動檢查新版本。
+應用程式內建自動更新，啟動時會自動檢查新版本。Windows 免安裝版不會自動更新，有新版本時只會通知。
 
 ### Homebrew（macOS）
 
@@ -53,6 +59,10 @@ WEBKIT_DISABLE_DMABUF_RENDERER=1 ./Fanhuaji.AppImage
 - 拖放檔案即自動轉換，零點擊操作
 - 支援 txt、srt、ass、lrc、vtt、csv、json、xml、html、md、**epub** 等格式
 - EPUB 電子書轉換（逐章轉換，保留結構/CSS/圖片）
+- 逐句對照預覽原文與轉換結果，改動處會標出來
+- 覆蓋原檔前先備份，結束 App 前都能按「復原」放回原檔
+- 轉換中可停止；可移除單一檔案或清除已完成
+- 鍵盤操作：方向鍵切換檔案，⌘/Ctrl+O 加入檔案，⌘/Ctrl+Enter 開始轉換
 - 多種轉換模式：繁體化、簡體化、台灣化、香港化、中國化、注音化、拼音化等
 - 詞語模組設定（自動偵測 / 啟用 / 停用）
 - 自訂取代規則（轉換前取代、轉換後取代、保護詞彙）
@@ -83,11 +93,15 @@ npm run tauri dev
 
 # 正式建置
 npm run tauri build
+
+# 檢查與測試（與 CI 相同）
+npm run check && npm test
+cd src-tauri && cargo clippy -- -D warnings && cargo fmt --check && cargo test
 ```
 
 ### 發布新版本
 
-1. 更新版本號：
+1. 把 `CHANGELOG.md` 的 `[Unreleased]` 改成新版本，然後更新版本號：
 
 ```bash
 # 會同時更新 package.json、package-lock.json、src-tauri/tauri.conf.json、src-tauri/Cargo.toml
@@ -101,16 +115,6 @@ git push && git push --tags
 ```
 
 GitHub Actions 會自動為所有平台建置並建立 Release（含 `latest.json` 供自動更新）。
-
-### 手動發布
-
-```bash
-# 建置
-TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/fanhuaji.key)" npm run tauri build
-
-# 建立 GitHub Release
-gh release create v1.x.x src-tauri/target/release/bundle/dmg/*.dmg --title "v1.x.x"
-```
 
 ## 技術架構
 
