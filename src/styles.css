@@ -215,6 +215,8 @@ body {
   font-weight: 700;
   font-size: 18px;
   line-height: 1;
+  /* Noto Serif sits its ideographs ~0.06em low in the line box; lift the glyph to the optical centre. */
+  padding-bottom: 0.12em;
   box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.25), var(--shadow-sm);
 }
 
