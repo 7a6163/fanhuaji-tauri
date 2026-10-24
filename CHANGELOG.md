@@ -2,11 +2,15 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
-## [Unreleased]
+## [2.5.1] - 2026-10-25
+
+### Changed
+
+- 專案移到 [fanhuaji-desktop](https://github.com/fanhuaji-desktop) organization，自動更新、「關於」連結與 README 改用新網址；舊網址仍會自動轉址，已安裝的版本照常能更新（#45）
 
 ### Fixed
 
-- 切換介面語言後，已開啟的預覽標題（例如「已存檔 · 台灣化 · 182 字 · 8 行有變更」）仍停在舊語言
+- 切換介面語言後，已開啟的預覽標題（例如「已存檔 · 台灣化 · 182 字 · 8 行有變更」）仍停在舊語言（#44）
 
 ## [2.5.0] - 2026-10-24
 
