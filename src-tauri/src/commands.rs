@@ -177,8 +177,19 @@ async fn resolve_input(input_path: &str) -> Result<PathBuf, String> {
 /// canonical directory to prevent traversal.
 async fn resolve_output(
     params: &ConvertParams,
+    canonical_input: &Path,
     converter: &str,
 ) -> Result<(PathBuf, String), String> {
+    // Overwrite writes over the input itself: the real file behind a symlink, and never a
+    // same-named file in a custom save folder, which would be replaced without a backup.
+    if params.naming == "overwrite" {
+        let name = canonical_input
+            .file_name()
+            .ok_or("FILENAME_UNAVAILABLE")?
+            .to_string_lossy()
+            .into_owned();
+        return Ok((canonical_input.to_path_buf(), name));
+    }
     let input = Path::new(&params.input_path);
     let dir = resolve_output_dir(input, &params.save_folder)?;
     let output_name = build_output_name(input, &params.naming, converter, &params.custom_suffix)?;
@@ -229,7 +240,7 @@ pub async fn convert_file(
     )
     .await?;
 
-    let (output_path, output_name) = resolve_output(&params, &result_converter).await?;
+    let (output_path, output_name) = resolve_output(&params, &canonical, &result_converter).await?;
     let backup_path = backup_if_overwrite(&backups, &params.file_id, &canonical, &output_path)?;
 
     // Write output in the source file's encoding
@@ -373,7 +384,7 @@ pub async fn convert_epub(
         last_error,
     )?;
 
-    let (output_path, output_name) = resolve_output(&params, &params.converter).await?;
+    let (output_path, output_name) = resolve_output(&params, &canonical, &params.converter).await?;
     let backup_path = backup_if_overwrite(&backups, &params.file_id, &canonical, &output_path)?;
 
     // Repack EPUB

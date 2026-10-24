@@ -13,6 +13,7 @@ import {
   isEpubFile,
   isSafeUrl,
   parseFilePath,
+  parseStoredObject,
   removeCompleted,
   resetErrors,
   shouldResumeConversion,
@@ -454,5 +455,17 @@ describe("countUndoable", () => {
       makeFile({ status: "error", backupPath: "/b/3" }),
     ];
     expect(countUndoable(files)).toBe(2);
+  });
+});
+
+describe("parseStoredObject", () => {
+  it("returns the stored object", () => {
+    expect(parseStoredObject('{"Naruto":"1"}')).toEqual({ Naruto: "1" });
+  });
+
+  it("reads missing, corrupt or non-object values as empty", () => {
+    for (const raw of [null, "", "{broken", "null", "[1]", '"text"', "42"]) {
+      expect(parseStoredObject(raw)).toEqual({});
+    }
   });
 });

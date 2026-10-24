@@ -30,6 +30,7 @@ import {
   isEpubFile,
   isSafeUrl,
   parseFilePath,
+  parseStoredObject,
   removeCompleted,
   resetErrors,
   shouldResumeConversion,
@@ -76,9 +77,7 @@ let stopRequested = false;
 // The last batch was stopped: keep the convert button up even with auto-convert on.
 let batchStopped = false;
 let moduleData: ModuleInfo[] = [];
-let moduleSettings: Record<string, string> = JSON.parse(
-  localStorage.getItem(STORAGE_KEYS.modules) ?? "{}",
-);
+let moduleSettings = parseStoredObject(localStorage.getItem(STORAGE_KEYS.modules));
 let activeCategory = "";
 
 // --- DOM ---

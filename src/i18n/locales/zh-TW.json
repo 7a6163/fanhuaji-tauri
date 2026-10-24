@@ -170,6 +170,7 @@
   "errors.BACKUP_NOT_FOUND": "找不到這個檔案的備份",
   "errors.FILE_TOO_LARGE": "檔案過大（上限 50 MB）",
   "errors.NOT_TEXT_FILE": "不是文字檔",
+  "errors.DECODE_FAILED": "無法以 {detail} 讀取這個檔案，部分內容不是有效字元。請另存成 UTF-8 後再試",
   "errors.FILENAME_UNAVAILABLE": "無法取得檔案名稱",
   "errors.OUTPUT_DIR_INVALID": "輸出目錄無效：{detail}",
   "errors.OUTPUT_CREATE_FAILED": "無法建立輸出檔案：{detail}",

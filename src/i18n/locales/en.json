@@ -170,6 +170,7 @@
   "errors.BACKUP_NOT_FOUND": "No backup found for this file",
   "errors.FILE_TOO_LARGE": "File too large (limit 50 MB)",
   "errors.NOT_TEXT_FILE": "Not a text file",
+  "errors.DECODE_FAILED": "Couldn't read the file as {detail} text; some bytes are invalid. Save it as UTF-8 and try again",
   "errors.FILENAME_UNAVAILABLE": "Cannot get file name",
   "errors.OUTPUT_DIR_INVALID": "Invalid output directory: {detail}",
   "errors.OUTPUT_CREATE_FAILED": "Cannot create output file: {detail}",

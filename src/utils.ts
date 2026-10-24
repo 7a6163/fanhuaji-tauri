@@ -131,6 +131,18 @@ export function isSafeUrl(url: string): boolean {
   }
 }
 
+/** A stored JSON object setting; anything corrupt or not a plain object reads as empty. */
+export function parseStoredObject(raw: string | null): Record<string, string> {
+  try {
+    const value: unknown = JSON.parse(raw ?? "{}");
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, string>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 export function isEpubFile(filename: string): boolean {
   return filename.toLowerCase().endsWith(".epub");
 }
