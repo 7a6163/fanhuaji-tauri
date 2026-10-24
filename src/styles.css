@@ -13,7 +13,7 @@
   --border-light: #ece7da;
   --border-strong: #cfc6b2;
   --text: #211e1a;          /* near-black ink */
-  --text-muted: #837b6c;    /* AA on paper */
+  --text-muted: #6f675a;    /* 5.3:1 on surface: AA at small sizes */
   --text-faint: #a89f8d;
   --accent: #c0392b;        /* 朱印 vermillion */
   --accent-deep: #9c2b20;
@@ -28,7 +28,7 @@
   --hover-strong: rgba(33,30,26,0.07);
   --scrollbar-track: transparent;
   --scrollbar-thumb: #cfc6b2;
-  --serif: "Noto Serif TC", "Songti TC", "Source Han Serif TC", serif;
+  --serif: "Fanhuaji Serif", "Noto Serif TC", "Songti TC", "Source Han Serif TC", serif;
   --shadow-sm: 0 1px 2px rgba(60,50,30,0.06);
   --shadow-md: 0 6px 22px rgba(60,50,30,0.10), 0 1px 3px rgba(60,50,30,0.06);
   --shadow-lg: 0 18px 48px rgba(40,32,16,0.18), 0 3px 10px rgba(40,32,16,0.10);
@@ -91,6 +91,53 @@
   }
 }
 
+/* Brand serif: only the glyphs the seal, wordmark and drawer title use (繁化姬 設定 设置
+   + ASCII), subset from @fontsource-variable/noto-serif-tc 5.3.1 with fontTools pyftsubset.
+   shortcut: other text in --serif falls back to the system serif; add glyphs here if a new
+   serif label appears. */
+@font-face {
+  font-family: "Fanhuaji Serif";
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("./assets/fonts/brand-serif-0.woff2") format("woff2");
+  unicode-range: U+0020-007E;
+}
+@font-face {
+  font-family: "Fanhuaji Serif";
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("./assets/fonts/brand-serif-1.woff2") format("woff2");
+  unicode-range: U+8BBE;
+}
+@font-face {
+  font-family: "Fanhuaji Serif";
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("./assets/fonts/brand-serif-2.woff2") format("woff2");
+  unicode-range: U+59EC;
+}
+@font-face {
+  font-family: "Fanhuaji Serif";
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("./assets/fonts/brand-serif-3.woff2") format("woff2");
+  unicode-range: U+7E41;
+}
+@font-face {
+  font-family: "Fanhuaji Serif";
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("./assets/fonts/brand-serif-4.woff2") format("woff2");
+  unicode-range: U+7F6E;
+}
+@font-face {
+  font-family: "Fanhuaji Serif";
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("./assets/fonts/brand-serif-5.woff2") format("woff2");
+  unicode-range: U+5316, U+8A2D, U+5B9A;
+}
+
 /* Reset */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -141,17 +188,12 @@ body {
   user-select: none;
 }
 
-.app-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-
 /* Brand: vermillion seal + serif wordmark */
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
+  flex-shrink: 0;
 }
 
 .seal {
@@ -237,12 +279,15 @@ html[lang="en"] .brand-sub { display: none; }
   background: var(--surface);
   color: var(--text);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
 }
 .out-pill-btn:hover { border-color: var(--border-strong); background: var(--hover); }
 .out-pill-btn .ti-folder { color: var(--text-muted); }
+/* Overwrite replaces the input files, so the pill stays in the accent while it is on. */
+.out-pill-btn.is-overwrite { border-color: var(--accent); color: var(--accent); }
+.out-pill-btn.is-overwrite .ti-folder { color: var(--accent); }
 .out-pill-caret { font-size: 13px; opacity: 0.6; }
 
 .out-pop {
@@ -261,7 +306,7 @@ html[lang="en"] .brand-sub { display: none; }
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-weight: 700;
   padding: 8px 9px 4px;
 }
@@ -282,7 +327,7 @@ html[lang="en"] .brand-sub { display: none; }
 .out-opt:hover { background: var(--hover); }
 .oo-body { flex: 1; min-width: 0; }
 .oo-title { font-size: 13px; }
-.oo-desc { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+.oo-desc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
 .oo-check { color: var(--accent); font-size: 15px; opacity: 0; }
 .out-opt[aria-checked="true"] .oo-title { color: var(--accent); font-weight: 600; }
 .out-opt[aria-checked="true"] .oo-check { opacity: 1; }
@@ -305,7 +350,6 @@ html[lang="en"] .brand-sub { display: none; }
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 8px;
-  white-space: nowrap;
 }
 
 .icon-btn:hover {
@@ -324,7 +368,7 @@ html[lang="en"] .brand-sub { display: none; }
 
 /* Left: file queue */
 .queue-col {
-  width: 380px;
+  width: clamp(260px, 45%, 380px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -341,7 +385,7 @@ html[lang="en"] .brand-sub { display: none; }
   flex-shrink: 0;
 }
 .qh-title { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; }
-.qh-meta { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.qh-meta { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .qh-spacer { flex: 1; }
 .pane-act {
   border: none;
@@ -375,7 +419,7 @@ html[lang="en"] .brand-sub { display: none; }
 /* File cards */
 .file-card {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 11px;
   align-items: center;
   padding: 9px 10px;
@@ -386,27 +430,65 @@ html[lang="en"] .brand-sub { display: none; }
   transition: background 0.1s;
 }
 .file-card:hover { background: var(--hover); }
-.file-card[aria-selected="true"] {
+.file-card.is-selected {
   background: var(--accent-weak);
   border-color: var(--accent-weak);
 }
+/* The card's preview control: badge + name, reset to look like plain card content. */
+.fc-main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 11px;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .fc-body { min-width: 0; }
 .fc-name {
-  font-size: 13.5px;
+  display: block;
+  font-size: 14px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .fc-meta {
-  font-size: 11.5px;
-  color: var(--text-faint);
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
   margin-top: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.fc-status { flex-shrink: 0; display: grid; place-items: center; }
+.fc-status { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+.status-action:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+/* Card icon actions; names live in aria-label and the tooltip. */
+.fc-undo,
+.fc-reveal {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+.fc-undo:hover,
+.fc-reveal:hover { background: var(--hover-strong); color: var(--text); }
+/* Undo is the way back from an overwrite, so it carries the accent. */
+.fc-undo,
+.fc-undo:hover { color: var(--accent); }
+.fc-undo:disabled { opacity: 0.5; cursor: default; }
 
 /* Right: live preview */
 .preview-col {
@@ -445,7 +527,7 @@ html[lang="en"] .brand-sub { display: none; }
   color: var(--text-muted);
 }
 .preview-empty .pe-title { font-weight: 600; color: var(--text); font-size: 14px; }
-.preview-empty .pe-sub { font-size: 12.5px; max-width: 280px; line-height: 1.6; }
+.preview-empty .pe-sub { font-size: 13px; max-width: 280px; line-height: 1.6; }
 
 /* Drop zone */
 .drop-zone {
@@ -459,7 +541,7 @@ html[lang="en"] .brand-sub { display: none; }
   border: 2px dashed var(--border);
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
 }
 
 .drop-zone:hover,
@@ -484,41 +566,17 @@ html[lang="en"] .brand-sub { display: none; }
   font-weight: 600;
 }
 
-.drop-subtitle {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
 .drop-formats {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 4px;
-}
-
-/* File list */
-.file-list {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  text-align: center;
 }
 
 .file-items {
   flex: 1;
   overflow-y: auto;
   padding: 4px 0;
-}
-
-.file-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  transition: background 0.15s;
-}
-
-.file-item:hover {
-  background: var(--hover);
 }
 
 /* Format badge (SRT / ASS / VTT / …) */
@@ -585,6 +643,14 @@ html[lang="en"] .brand-sub { display: none; }
   color: var(--red);
 }
 
+.status-icon.warning {
+  color: var(--yellow);
+}
+
+.status-icon.restored {
+  color: var(--text-muted);
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -596,39 +662,6 @@ html[lang="en"] .brand-sub { display: none; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.file-message {
-  font-size: 12px;
-  color: var(--text-muted);
-  flex-shrink: 0;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.add-more-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px;
-  margin: 4px 16px 8px;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.add-more-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-weak);
 }
 
 /* Progress bar */
@@ -661,14 +694,6 @@ html[lang="en"] .brand-sub { display: none; }
   flex-shrink: 0;
 }
 
-.status-badge {
-  font-weight: 500;
-}
-
-.status-badge.blue { color: var(--text-muted); }
-.status-badge.green { color: var(--green); }
-.status-badge.red { color: var(--red); }
-
 /* Status-bar stats (mode · counts) */
 .stat {
   display: inline-flex;
@@ -681,6 +706,7 @@ html[lang="en"] .brand-sub { display: none; }
 .stat.mode { color: var(--text-muted); }
 .stat.mode .ti { font-size: 14px; }
 .stat.ok .n { color: var(--green); }
+.stat.warn .n { color: var(--yellow); }
 .stat.err .n { color: var(--red); }
 .stat-divider { width: 1px; height: 13px; background: var(--border); }
 
@@ -789,7 +815,7 @@ html[lang="en"] .brand-sub { display: none; }
   font-family: inherit;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .drawer-tab:hover {
@@ -1059,42 +1085,7 @@ textarea:focus {
   margin-top: 6px;
 }
 
-/* File rows open a diff preview on click */
-.file-item { cursor: pointer; }
-
 /* ===== Diff preview panel ===== */
-.preview-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(20,16,8,0.32);
-  z-index: 100;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-}
-[data-theme="dark"] .preview-backdrop { background: rgba(0,0,0,0.55); }
-.preview-backdrop.visible { opacity: 1; pointer-events: auto; }
-
-.preview-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 560px;
-  max-width: 92vw;
-  background: var(--surface-2);
-  border-left: 1px solid var(--border);
-  z-index: 101;
-  display: flex;
-  flex-direction: column;
-  transform: translateX(100%);
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.preview-panel.visible {
-  transform: translateX(0);
-  box-shadow: var(--shadow-lg);
-}
-
 .preview-head {
   display: flex;
   align-items: center;
@@ -1114,8 +1105,8 @@ textarea:focus {
   white-space: nowrap;
 }
 .preview-stats {
-  font-size: 11.5px;
-  color: var(--text-faint);
+  font-size: 12px;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
 }
@@ -1185,3 +1176,47 @@ textarea:focus {
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { opacity: 0.8; }
+
+/* Screen-reader-only text (live status announcements). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Keyboard focus: one vermillion ring for every control. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Narrow windows: the seal alone carries the brand, the output pill drops to its icon
+   (its name stays in the tooltip and aria-label) and the mode buttons tighten, so the
+   toolbar fits at the 640px minimum even with English labels. */
+@media (max-width: 720px) {
+  .brand-text { display: none; }
+  #out-pill-label { display: none; }
+  .mode-seg button { padding: 5px 9px; }
+}
+
+/* Reduced motion: panels fade instead of sliding; the spinner pulses in place. */
+@media (prefers-reduced-motion: reduce) {
+  .settings-drawer {
+    transform: none;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .settings-drawer.visible { opacity: 1; pointer-events: auto; }
+  .status-icon.converting,
+  .preview-loading .ti-loader-2 {
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  50% { opacity: 0.4; }
+}

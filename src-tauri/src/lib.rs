@@ -66,6 +66,9 @@ pub(crate) struct ConvertFileResult {
     pub output_path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warnings: Option<String>,
+    /// Set when overwrite mode replaced the input: a copy of the original to preview or restore.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup_path: Option<String>,
 }
 
 /// Arguments shared by `convert_file`, `convert_epub` and `preview_convert`.
@@ -489,6 +492,55 @@ pub(crate) fn write_atomic(
     Ok(())
 }
 
+/// Copies of originals taken before overwrite mode replaces them, so the UI can
+/// undo. Keyed by file id; the frontend never names a path to restore, so it
+/// cannot use this to write arbitrary files. Cleared on every launch.
+pub(crate) struct Backups {
+    dir: PathBuf,
+    entries: std::sync::Mutex<HashMap<String, (PathBuf, PathBuf)>>,
+}
+
+impl Backups {
+    pub(crate) fn new(dir: PathBuf) -> std::io::Result<Self> {
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir)?;
+        Ok(Self {
+            dir,
+            entries: Default::default(),
+        })
+    }
+
+    /// Copy `original` aside under `id` and return the copy's path.
+    pub(crate) fn save(&self, id: &str, original: &Path) -> Result<PathBuf, String> {
+        let backup = tempfile::NamedTempFile::new_in(&self.dir)
+            .and_then(|f| f.into_temp_path().keep().map_err(|e| e.error))
+            .map_err(|e| format!("BACKUP_FAILED:{e}"))?;
+        std::fs::copy(original, &backup).map_err(|e| format!("BACKUP_FAILED:{e}"))?;
+        let old = self
+            .entries
+            .lock()
+            .map_err(|_| "BACKUP_FAILED:lock")?
+            .insert(id.to_string(), (backup.clone(), original.to_path_buf()));
+        if let Some((old_backup, _)) = old {
+            let _ = std::fs::remove_file(old_backup);
+        }
+        Ok(backup)
+    }
+
+    /// Write the copy saved under `id` back over its original and drop it.
+    pub(crate) fn restore(&self, id: &str) -> Result<(), String> {
+        let mut entries = self.entries.lock().map_err(|_| "RESTORE_FAILED:lock")?;
+        let (backup, original) = entries.get(id).ok_or("BACKUP_NOT_FOUND")?;
+        let bytes = std::fs::read(backup).map_err(|e| format!("RESTORE_FAILED:{e}"))?;
+        write_atomic(original, |f| {
+            std::io::Write::write_all(f, &bytes).map_err(|e| format!("RESTORE_FAILED:{e}"))
+        })?;
+        let _ = std::fs::remove_file(backup);
+        entries.remove(id);
+        Ok(())
+    }
+}
+
 pub(crate) fn build_service_info(info: ServiceInfoResponse) -> Result<ServiceInfo, String> {
     if info.code != 0 {
         return Err(format!("SERVICE_INFO_FAILED:{}", info.code));
@@ -673,6 +725,32 @@ mod tests {
     }
 
     // --- write_atomic ---
+
+    #[test]
+    fn backups_restore_original_and_forget_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let backups = Backups::new(dir.path().join("backups")).unwrap();
+        let path = dir.path().join("a.srt");
+        std::fs::write(&path, "原文").unwrap();
+        let backup = backups.save("id1", &path).unwrap();
+        std::fs::write(&path, "converted").unwrap();
+        assert_eq!(std::fs::read_to_string(&backup).unwrap(), "原文");
+
+        backups.restore("id1").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "原文");
+        assert!(!backup.exists());
+        assert_eq!(backups.restore("id1").unwrap_err(), "BACKUP_NOT_FOUND");
+    }
+
+    #[test]
+    fn backups_new_clears_previous_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let backup_dir = dir.path().join("backups");
+        std::fs::create_dir_all(&backup_dir).unwrap();
+        std::fs::write(backup_dir.join("stale"), "x").unwrap();
+        Backups::new(backup_dir.clone()).unwrap();
+        assert!(std::fs::read_dir(&backup_dir).unwrap().next().is_none());
+    }
 
     #[test]
     fn write_atomic_replaces_contents() {
@@ -1097,6 +1175,7 @@ mod tests {
             output_name: "test.Taiwan.txt".to_string(),
             output_path: "/tmp/test.Taiwan.txt".to_string(),
             warnings: None,
+            backup_path: None,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["outputName"], "test.Taiwan.txt");
@@ -1269,6 +1348,7 @@ mod tests {
             output_name: "t.txt".to_string(),
             output_path: "/tmp/t.txt".to_string(),
             warnings: None,
+            backup_path: None,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert!(json.get("warnings").is_none());
@@ -1280,6 +1360,7 @@ mod tests {
             output_name: "t.txt".to_string(),
             output_path: "/tmp/t.txt".to_string(),
             warnings: Some("warn".to_string()),
+            backup_path: None,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["warnings"], "warn");

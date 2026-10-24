@@ -13,10 +13,12 @@ export interface FileEntry {
   id: string;
   inputPath: string;
   inputName: string;
-  status: "pending" | "converting" | "success" | "error";
+  status: "pending" | "converting" | "success" | "error" | "restored";
   message: string;
   outputName: string;
   outputPath: string;
+  /** Copy of the original kept when overwrite mode replaced it; enables undo. */
+  backupPath?: string;
   chapterIndex?: number;
   chapterTotal?: number;
   chapterName?: string;
@@ -30,7 +32,13 @@ export function fileExt(name: string): string {
 /** The subtitle line on a file card, already HTML-escaped. */
 export function fileMessage(f: FileEntry): string {
   // Success carries a message only when there were warnings (e.g. EPUB_PARTIAL_FAILED).
-  if (f.status === "success") return escHtml(f.message || t("file.convertDone"));
+  if (f.status === "success") {
+    if (f.message) return escHtml(f.message);
+    if (f.backupPath) return escHtml(t("file.overwritten"));
+    return escHtml(
+      f.outputName ? t("file.savedAs", { name: f.outputName }) : t("file.convertDone"),
+    );
+  }
   if (f.status === "converting") {
     return f.chapterTotal
       ? escHtml(
@@ -43,6 +51,7 @@ export function fileMessage(f: FileEntry): string {
       : escHtml(t("file.converting"));
   }
   if (f.status === "error") return escHtml(f.message);
+  if (f.status === "restored") return escHtml(t("file.restored"));
   // pending: show the format name as a neutral subtitle
   return escHtml(fileExt(f.inputName).toUpperCase() || "—");
 }
@@ -87,9 +96,10 @@ export function resetErrors(files: readonly FileEntry[]): FileEntry[] {
 }
 
 export function countByStatus(files: readonly FileEntry[]) {
-  const counts = { total: files.length, pending: 0, success: 0, error: 0 };
+  const counts = { total: files.length, pending: 0, success: 0, warning: 0, error: 0 };
   for (const f of files) {
     if (f.status === "pending") counts.pending++;
+    else if (f.status === "success" && f.message) counts.warning++;
     else if (f.status === "success") counts.success++;
     else if (f.status === "error") counts.error++;
   }

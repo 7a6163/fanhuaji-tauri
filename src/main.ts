@@ -9,7 +9,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getLocale, initI18n, type Locale, setLocale, t, translateError } from "./i18n/i18n";
 import { initTheme } from "./theme";
 import { initUpdater } from "./updater";
@@ -89,11 +89,15 @@ const statusBar = $<HTMLElement>("#status-bar");
 const countTotal = $<HTMLSpanElement>("#count-total");
 const countSuccess = $<HTMLSpanElement>("#count-success");
 const countError = $<HTMLSpanElement>("#count-error");
+const countWarning = $<HTMLSpanElement>("#count-warning");
+const warningStat = $<HTMLSpanElement>("#stat-warning");
+const clearBtn = $<HTMLButtonElement>("#btn-clear");
 const retryBtn = $<HTMLButtonElement>("#btn-retry");
 const convertBtn = $<HTMLButtonElement>("#btn-convert");
 const convertCount = $<HTMLSpanElement>("#convert-count");
 const statusMode = $<HTMLSpanElement>("#status-mode");
 const autoConvertCheckbox = $<HTMLInputElement>("#auto-convert");
+const srStatus = $<HTMLDivElement>("#sr-status");
 
 // --- Auto-convert ---
 
@@ -126,20 +130,32 @@ function formatBadge(name: string): string {
   return `<span class="fmt-badge ${cls}">${escHtml(label)}</span>`;
 }
 
-function statusIcon(status: FileEntry["status"]): string {
-  switch (status) {
+function statusIcon(f: FileEntry): string {
+  // A success with a message finished with warnings (e.g. some EPUB chapters failed).
+  if (f.status === "success" && f.message)
+    return '<span class="status-icon warning"><i aria-hidden="true" class="ti ti-alert-triangle"></i></span>';
+  switch (f.status) {
     case "pending":
-      return '<span class="status-icon pending"><i class="ti ti-clock"></i></span>';
+      return '<span class="status-icon pending"><i aria-hidden="true" class="ti ti-clock"></i></span>';
     case "converting":
-      return '<span class="status-icon converting"><i class="ti ti-loader-2"></i></span>';
+      return '<span class="status-icon converting"><i aria-hidden="true" class="ti ti-loader-2"></i></span>';
     case "success":
-      return '<span class="status-icon success"><i class="ti ti-check"></i></span>';
+      return '<span class="status-icon success"><i aria-hidden="true" class="ti ti-check"></i></span>';
     case "error":
-      return '<span class="status-icon error"><i class="ti ti-x"></i></span>';
+      return '<span class="status-icon error"><i aria-hidden="true" class="ti ti-x"></i></span>';
+    case "restored":
+      return '<span class="status-icon restored"><i aria-hidden="true" class="ti ti-history"></i></span>';
   }
 }
 
 // --- Render ---
+
+// Card subtitles are one truncated line; the tooltip carries the full text.
+function metaTitle(f: FileEntry): string {
+  if (f.status === "error") return f.message;
+  if (f.status === "success") return f.message ? `${f.message}\n${f.outputPath}` : f.outputPath;
+  return "";
+}
 
 function render() {
   const isEmpty = files.length === 0;
@@ -162,23 +178,55 @@ function render() {
   const counts = countByStatus(files);
   countTotal.textContent = String(counts.total);
   countSuccess.textContent = String(counts.success);
+  countWarning.textContent = String(counts.warning);
+  warningStat.classList.toggle("hidden", counts.warning === 0);
   countError.textContent = String(counts.error);
-  convertCount.textContent = isEmpty ? "" : `(${files.length})`;
+  // Clearing mid-batch would hide files the running loop is still writing.
+  clearBtn.disabled = isConverting;
+  convertCount.textContent = counts.pending ? `(${counts.pending})` : "";
+
+  // innerHTML replaces the cards, so put keyboard focus back where it was.
+  const focused = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
+    "#file-items [data-id]",
+  );
+  const focusedId = focused?.dataset.id;
 
   // File cards
   fileItems.innerHTML = files
     .map(
       (f) => `
-    <div class="file-card" data-id="${escHtml(f.id)}" aria-selected="${f.id === selectedId}">
-      ${formatBadge(f.inputName)}
-      <div class="fc-body">
-        <div class="fc-name" title="${escHtml(`${f.inputPath}/${f.inputName}`)}">${escHtml(f.inputName)}</div>
-        <div class="fc-meta" title="${f.status === "success" && f.message ? escHtml(f.message) : ""}">${fileMessage(f)}</div>
-      </div>
-      <div class="fc-status">${statusIcon(f.status)}</div>
+    <div class="file-card${f.id === selectedId ? " is-selected" : ""}" role="listitem" data-id="${escHtml(f.id)}">
+      <button type="button" class="fc-main"${f.id === selectedId ? ' aria-current="true"' : ""}>
+        ${formatBadge(f.inputName)}
+        <span class="fc-body">
+          <span class="fc-name" title="${escHtml(`${f.inputPath}/${f.inputName}`)}">${escHtml(f.inputName)}</span>
+          <span class="fc-meta" title="${escHtml(metaTitle(f))}">${fileMessage(f)}</span>
+        </span>
+      </button>
+      <div class="fc-status">${
+        f.status === "success" && f.backupPath
+          ? `<button type="button" class="fc-undo" data-undo="${escHtml(f.id)}" title="${escHtml(t("file.undoTitle"))}" aria-label="${escHtml(t("file.undo"))}"><i aria-hidden="true" class="ti ti-arrow-back-up"></i></button>`
+          : ""
+      }${
+        f.status === "success" && f.outputPath
+          ? `<button type="button" class="fc-reveal" data-reveal="${escHtml(f.id)}" title="${escHtml(t("file.reveal"))}" aria-label="${escHtml(t("file.reveal"))}"><i aria-hidden="true" class="ti ti-folder-open"></i></button>`
+          : ""
+      }${statusIcon(f)}</div>
     </div>`,
     )
     .join("");
+
+  if (focusedId) {
+    const card = [...fileItems.querySelectorAll<HTMLElement>(".file-card")].find(
+      (c) => c.dataset.id === focusedId,
+    );
+    card?.querySelector<HTMLElement>(".fc-main")?.focus();
+  }
+}
+
+/** Screen-reader announcement, e.g. when a batch finishes. */
+function announce(message: string): void {
+  srStatus.textContent = message;
 }
 
 // --- Diff preview ---
@@ -358,6 +406,13 @@ async function previewFile(file: FileEntry): Promise<void> {
   previewPane.classList.remove("hidden");
   render();
 
+  // The conversion already failed: show why in full instead of re-running the API.
+  if (file.status === "error") {
+    previewStats.textContent = "";
+    previewBody.innerHTML = `<div class="preview-error"><i aria-hidden="true" class="ti ti-alert-triangle"></i> ${escHtml(file.message)}</div>`;
+    return;
+  }
+
   if (isEpubFile(file.inputName)) {
     previewStats.textContent = "";
     previewBody.innerHTML = `<div class="preview-loading">${escHtml(t("preview.epubUnsupported"))}</div>`;
@@ -365,12 +420,13 @@ async function previewFile(file: FileEntry): Promise<void> {
   }
 
   previewStats.textContent = t("preview.converting");
-  previewBody.innerHTML = `<div class="preview-loading"><i class="ti ti-loader-2"></i> ${escHtml(t("preview.loading"))}</div>`;
+  previewBody.innerHTML = `<div class="preview-loading"><i aria-hidden="true" class="ti ti-loader-2"></i> ${escHtml(t("preview.loading"))}</div>`;
 
   try {
-    const res = await invoke<PreviewResult>("preview_convert", {
-      params: readConvertParams(file),
-    });
+    const params = readConvertParams(file);
+    // After an overwrite the input holds the converted text; diff the saved original instead.
+    if (file.backupPath) params.inputPath = file.backupPath;
+    const res = await invoke<PreviewResult>("preview_convert", { params });
     if (!isCurrent()) return;
     const diff = renderDiff(res.original, res.converted);
     const chars = [...res.original].length;
@@ -380,7 +436,7 @@ async function previewFile(file: FileEntry): Promise<void> {
   } catch (err) {
     if (!isCurrent()) return;
     previewStats.textContent = "";
-    previewBody.innerHTML = `<div class="preview-error"><i class="ti ti-alert-triangle"></i> ${escHtml(translateError(String(err)))}</div>`;
+    previewBody.innerHTML = `<div class="preview-error"><i aria-hidden="true" class="ti ti-alert-triangle"></i> ${escHtml(translateError(String(err)))}</div>`;
   }
 }
 
@@ -465,10 +521,12 @@ async function convertPending() {
 
       try {
         const params = readConvertParams(file);
-        const result: { outputName: string; outputPath: string; warnings?: string } = await invoke(
-          isEpubFile(file.inputName) ? "convert_epub" : "convert_file",
-          { params },
-        );
+        const result: {
+          outputName: string;
+          outputPath: string;
+          warnings?: string;
+          backupPath?: string;
+        } = await invoke(isEpubFile(file.inputName) ? "convert_epub" : "convert_file", { params });
 
         files = files.map((f) =>
           f.id === file.id
@@ -482,6 +540,7 @@ async function convertPending() {
                   : "",
                 outputName: result.outputName,
                 outputPath: result.outputPath,
+                backupPath: result.backupPath,
               }
             : f,
         );
@@ -500,6 +559,14 @@ async function convertPending() {
   } finally {
     isConverting = false;
     hideProgress();
+    const c = countByStatus(files);
+    announce(
+      t("status.announce", {
+        success: String(c.success),
+        warning: String(c.warning),
+        error: String(c.error),
+      }),
+    );
   }
 
   // Files added mid-batch were skipped by the isConverting guard: pick them up
@@ -510,27 +577,84 @@ async function convertPending() {
 
 // --- Settings drawer ---
 
+const settingsDrawer = $<HTMLElement>("#settings-drawer");
+const settingsBtn = $<HTMLButtonElement>("#btn-settings");
+// aria-modal alone does not stop Tab: make everything behind the drawer inert while it is open.
+const behindDrawer = [...document.querySelectorAll<HTMLElement>(".header, .main, .status-bar")];
+
 function openSettings() {
   $<HTMLDivElement>("#settings-backdrop").classList.add("visible");
-  $<HTMLElement>("#settings-drawer").classList.add("visible");
+  settingsDrawer.classList.add("visible");
+  settingsDrawer.inert = false;
+  for (const el of behindDrawer) el.inert = true;
+  settingsDrawer.querySelector<HTMLElement>('.drawer-tab[aria-selected="true"]')?.focus();
 }
 
 function closeSettings() {
+  if (settingsDrawer.inert) return;
   $<HTMLDivElement>("#settings-backdrop").classList.remove("visible");
-  $<HTMLElement>("#settings-drawer").classList.remove("visible");
+  settingsDrawer.classList.remove("visible");
+  // inert keeps the off-screen drawer out of the tab order.
+  settingsDrawer.inert = true;
+  for (const el of behindDrawer) el.inert = false;
+  settingsBtn.focus();
 }
 
-$<HTMLButtonElement>("#btn-settings").addEventListener("click", openSettings);
+settingsBtn.addEventListener("click", openSettings);
 $<HTMLButtonElement>("#btn-close-settings").addEventListener("click", closeSettings);
 $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings);
 
 // Click a file card to load its diff preview in the right pane
-fileItems.addEventListener("click", (e) => {
+fileItems.addEventListener("click", async (e) => {
+  const reveal = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-reveal]");
+  if (reveal) {
+    const file = files.find((f) => f.id === reveal.dataset.reveal);
+    if (!file) return;
+    try {
+      await revealItemInDir(file.outputPath);
+    } catch (err) {
+      files = files.map((f) =>
+        f.id === file.id
+          ? { ...f, status: "error" as const, message: translateError(`REVEAL_FAILED:${err}`) }
+          : f,
+      );
+      render();
+    }
+    return;
+  }
+  const undo = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-undo]");
+  if (undo) {
+    const id = undo.dataset.undo;
+    undo.disabled = true;
+    try {
+      await invoke("restore_backup", { fileId: id });
+      files = files.map((f) =>
+        f.id === id ? { ...f, status: "restored" as const, message: "", backupPath: undefined } : f,
+      );
+    } catch (err) {
+      files = files.map((f) =>
+        f.id === id ? { ...f, status: "error" as const, message: translateError(String(err)) } : f,
+      );
+    }
+    render();
+    return;
+  }
   const card = (e.target as HTMLElement).closest<HTMLElement>(".file-card");
   if (!card) return;
   const id = card.getAttribute("data-id");
   const file = files.find((f) => f.id === id);
   if (file) void previewFile(file);
+});
+
+// Up/Down move between cards; Tab still reaches each card's own buttons.
+fileItems.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const mains = [...fileItems.querySelectorAll<HTMLElement>(".fc-main")];
+  const current = (e.target as HTMLElement).closest(".file-card")?.querySelector(".fc-main");
+  const i = mains.indexOf(current as HTMLElement);
+  if (i < 0) return;
+  e.preventDefault();
+  mains[Math.max(0, Math.min(mains.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))]?.focus();
 });
 
 // Toolbar mode segmented control — drives the same converter as Settings.
@@ -575,6 +699,10 @@ function syncOutPill(): void {
     opt.setAttribute("aria-checked", String(on));
     if (on) outPillLabel.textContent = opt.querySelector(".oo-title")?.textContent ?? "";
   }
+  // The label is hidden in narrow windows; keep the button's name and tooltip.
+  outPillBtn.setAttribute("aria-label", outPillLabel.textContent ?? "");
+  outPillBtn.title = outPillLabel.textContent ?? "";
+  outPillBtn.classList.toggle("is-overwrite", namingSelect.value === "overwrite");
 }
 function closeOutPop(): void {
   outPop.classList.add("hidden");
@@ -584,6 +712,19 @@ outPillBtn.addEventListener("click", (e) => {
   e.stopPropagation();
   const nowHidden = outPop.classList.toggle("hidden");
   outPillBtn.setAttribute("aria-expanded", String(!nowHidden));
+  if (!nowHidden) outPop.querySelector<HTMLElement>('.out-opt[aria-checked="true"]')?.focus();
+});
+outPop.addEventListener("keydown", (e) => {
+  const opts = [...outPop.querySelectorAll<HTMLElement>(".out-opt")];
+  const i = opts.indexOf(document.activeElement as HTMLElement);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    const step = e.key === "ArrowDown" ? 1 : -1;
+    opts[(i + step + opts.length) % opts.length]?.focus();
+  } else if (e.key === "Escape" || e.key === "Tab") {
+    closeOutPop();
+    if (e.key === "Escape") outPillBtn.focus();
+  }
 });
 outPop.addEventListener("click", (e) => {
   const opt = (e.target as HTMLElement).closest<HTMLButtonElement>(".out-opt");
@@ -607,6 +748,21 @@ namingSelect.addEventListener("change", syncOutPill);
 syncOutPill();
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeSettings();
+});
+
+// Shortcuts: Cmd/Ctrl+O add files, Cmd/Ctrl+, settings, Cmd/Ctrl+Enter convert.
+document.addEventListener("keydown", (e) => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+  if (e.key === "o") {
+    e.preventDefault();
+    void openFiles();
+  } else if (e.key === ",") {
+    e.preventDefault();
+    openSettings();
+  } else if (e.key === "Enter" && !convertBtn.classList.contains("hidden")) {
+    e.preventDefault();
+    void convertPending();
+  }
 });
 
 // --- Restore persisted settings ---
@@ -707,19 +863,30 @@ saveFolderSelect?.addEventListener("change", async () => {
 });
 
 // Drawer tabs
-document.querySelectorAll<HTMLButtonElement>(".drawer-tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll(".drawer-tab").forEach((t) => {
-      t.classList.remove("active");
-    });
-    document.querySelectorAll(".drawer-panel").forEach((p) => {
-      p.classList.remove("active");
-    });
-    tab.classList.add("active");
-    const panel = document.querySelector(`[data-panel="${tab.dataset.drawerTab}"]`);
-    panel?.classList.add("active");
+const drawerTabs = [...document.querySelectorAll<HTMLButtonElement>(".drawer-tab")];
+function selectDrawerTab(tab: HTMLButtonElement): void {
+  for (const t of drawerTabs) {
+    const on = t === tab;
+    t.classList.toggle("active", on);
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+  }
+  document.querySelectorAll(".drawer-panel").forEach((p) => {
+    p.classList.remove("active");
   });
-});
+  document.querySelector(`[data-panel="${tab.dataset.drawerTab}"]`)?.classList.add("active");
+}
+for (const tab of drawerTabs) {
+  tab.addEventListener("click", () => selectDrawerTab(tab));
+  tab.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const step = e.key === "ArrowRight" ? 1 : -1;
+    const next =
+      drawerTabs[(drawerTabs.indexOf(tab) + step + drawerTabs.length) % drawerTabs.length];
+    selectDrawerTab(next);
+    next.focus();
+  });
+}
 
 // --- Module loading ---
 
@@ -820,7 +987,7 @@ dropZone.addEventListener("keydown", (e) => {
 
 $<HTMLButtonElement>("#btn-add-more").addEventListener("click", openFiles);
 
-$<HTMLButtonElement>("#btn-clear").addEventListener("click", () => {
+clearBtn.addEventListener("click", () => {
   files = [];
   render();
 });
@@ -878,6 +1045,28 @@ async function initVersion() {
 }
 
 initTheme();
+// Tooltips and the drop zone are where users can discover the shortcuts.
+const IS_MAC = /Mac/.test(navigator.userAgent);
+const SHORTCUT_HINTS: [selector: string, key: string, label: string][] = [
+  ["#btn-add-more", "O", "files.addMore"],
+  ["#btn-settings", ",", "header.settings"],
+  ["#btn-convert", "Enter", "status.convert"],
+];
+function shortcutLabel(key: string): string {
+  return IS_MAC ? `⌘${key === "Enter" ? "↩" : key}` : `Ctrl+${key}`;
+}
+function applyShortcutHints(): void {
+  for (const [sel, key, label] of SHORTCUT_HINTS) {
+    const el = $<HTMLElement>(sel);
+    el.title = `${t(label)} (${shortcutLabel(key)})`;
+    el.setAttribute("aria-keyshortcuts", `${IS_MAC ? "Meta" : "Control"}+${key}`);
+  }
+  $<HTMLSpanElement>("#drop-shortcut").textContent = t("drop.shortcut", {
+    key: shortcutLabel("O"),
+  });
+}
+applyShortcutHints();
+
 void initVersion();
 initUpdater();
 void loadServiceInfo();
@@ -890,6 +1079,9 @@ if (localeSelect) {
   localeSelect.value = getLocale();
   localeSelect.addEventListener("change", () => {
     setLocale(localeSelect.value as Locale);
+    applyShortcutHints();
+    // The status bar copies the converter <option> text, which translatePage() just changed.
+    syncStatusMode();
     render();
     renderModuleList();
     syncOutPill();
