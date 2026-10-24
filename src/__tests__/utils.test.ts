@@ -8,6 +8,7 @@ import {
   type FileEntry,
   fileExt,
   fileMessage,
+  inlineDiff,
   isEpubFile,
   isSafeUrl,
   parseFilePath,
@@ -369,3 +370,50 @@ describe("isEpubFile", () => {
 // --- fileTooltip ---
 
 // --- statusDotHtml ---
+
+describe("inlineDiff", () => {
+  const changed = (segs: { text: string; changed: boolean }[]) =>
+    segs.filter((g) => g.changed).map((g) => g.text);
+
+  it("marks a one-for-one swap on both sides", () => {
+    const d = inlineDiff("你能站起来吗", "你能站起來嗎");
+    expect(changed(d.orig)).toEqual(["来吗"]);
+    expect(changed(d.conv)).toEqual(["來嗎"]);
+    expect(d.conv.map((g) => g.text).join("")).toBe("你能站起來嗎");
+  });
+
+  it("marks separate runs separately when lengths match", () => {
+    const d = inlineDiff("这是软件说明", "這是軟件說明");
+    expect(changed(d.conv)).toEqual(["這", "軟", "說"]);
+    expect(changed(d.orig)).toEqual(["这", "软", "说"]);
+  });
+
+  it("finds kept characters when a conversion adds one", () => {
+    const d = inlineDiff("发生了什么 - 我刚刚", "發生了什麼事 - 我剛剛");
+    expect(changed(d.orig)).toEqual(["发", "么", "刚刚"]);
+    expect(changed(d.conv)).toEqual(["發", "麼事", "剛剛"]);
+  });
+
+  it("marks the whole middle when lengths differ past the LCS limit", () => {
+    const long = inlineDiff(`甲${"字".repeat(400)}`, `乙丙${"文".repeat(400)}`);
+    expect(changed(long.conv)).toEqual([`乙丙${"文".repeat(400)}`]);
+  });
+
+  it("marks the whole middle when nothing in it is shared", () => {
+    const d = inlineDiff("打开内存设置", "打開記憶體設定");
+    expect(changed(d.orig)).toEqual(["开内存设置"]);
+    expect(changed(d.conv)).toEqual(["開記憶體設定"]);
+  });
+
+  it("returns no changes for identical lines", () => {
+    const d = inlineDiff("00:00:01,000", "00:00:01,000");
+    expect(changed(d.orig)).toEqual([]);
+    expect(changed(d.conv)).toEqual([]);
+  });
+
+  it("keeps surrogate pairs whole", () => {
+    const d = inlineDiff("𠀋发", "𠀋發");
+    expect(changed(d.conv)).toEqual(["發"]);
+    expect(d.conv[0]).toEqual({ text: "𠀋", changed: false });
+  });
+});
