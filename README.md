@@ -2,14 +2,14 @@
 
 English | [正體中文](README.zh-TW.md)
 
-[![CI](https://github.com/7a6163/fanhuaji-tauri/actions/workflows/ci.yml/badge.svg)](https://github.com/7a6163/fanhuaji-tauri/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/7a6163/fanhuaji-tauri/graph/badge.svg)](https://codecov.io/gh/7a6163/fanhuaji-tauri)
+[![CI](https://github.com/fanhuaji-desktop/fanhuaji-tauri/actions/workflows/ci.yml/badge.svg)](https://github.com/fanhuaji-desktop/fanhuaji-tauri/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/fanhuaji-desktop/fanhuaji-tauri/graph/badge.svg)](https://codecov.io/gh/fanhuaji-desktop/fanhuaji-tauri)
 
 A desktop app for converting Chinese text between Traditional and Simplified, built with Tauri 2 and powered by the [zhconvert.org](https://zhconvert.org) API.
 
 ## Download
 
-Get the latest version from [Releases](https://github.com/7a6163/fanhuaji-tauri/releases):
+Get the latest version from [Releases](https://github.com/fanhuaji-desktop/fanhuaji-tauri/releases):
 
 | Platform | Architecture | Format |
 |----------|--------------|--------|

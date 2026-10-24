@@ -2,14 +2,14 @@
 
 [English](README.md) | 正體中文
 
-[![CI](https://github.com/7a6163/fanhuaji-tauri/actions/workflows/ci.yml/badge.svg)](https://github.com/7a6163/fanhuaji-tauri/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/7a6163/fanhuaji-tauri/graph/badge.svg)](https://codecov.io/gh/7a6163/fanhuaji-tauri)
+[![CI](https://github.com/fanhuaji-desktop/fanhuaji-tauri/actions/workflows/ci.yml/badge.svg)](https://github.com/fanhuaji-desktop/fanhuaji-tauri/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/fanhuaji-desktop/fanhuaji-tauri/graph/badge.svg)](https://codecov.io/gh/fanhuaji-desktop/fanhuaji-tauri)
 
 使用 Tauri 2 撰寫的中文繁簡轉換桌面應用程式，使用 [zhconvert.org](https://zhconvert.org) API。
 
 ## 下載
 
-前往 [Releases](https://github.com/7a6163/fanhuaji-tauri/releases) 下載最新版本：
+前往 [Releases](https://github.com/fanhuaji-desktop/fanhuaji-tauri/releases) 下載最新版本：
 
 | 平台 | 架構 | 格式 |
 |------|------|------|

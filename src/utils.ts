@@ -119,7 +119,7 @@ export function countByStatus(files: readonly FileEntry[]) {
 const ALLOWED_URL_PREFIXES = [
   "https://zhconvert.org",
   "https://docs.zhconvert.org",
-  "https://github.com/7a6163/fanhuaji-tauri",
+  "https://github.com/fanhuaji-desktop/fanhuaji-tauri",
 ];
 
 export function isSafeUrl(url: string): boolean {
