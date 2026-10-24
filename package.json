@@ -16,8 +16,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.9",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/cli": "^2.12.0",
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/cli": "^2.12.4",
     "@vitest/coverage-v8": "^4.1.2",
     "jsdom": "^29.0.1",
     "typescript": "^5.6.0",
@@ -28,8 +28,8 @@
     "@fontsource-variable/noto-sans-tc": "^5.2.10",
     "@fontsource/inter": "^5.2.8",
     "@tabler/icons-webfont": "^3.41.0",
-    "@tauri-apps/plugin-opener": "^2.5.3",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.0"
+    "@tauri-apps/plugin-opener": "^2.7.2",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.0"
   }
 }
