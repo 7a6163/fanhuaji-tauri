@@ -15,6 +15,9 @@
   "status.error": "错误:",
   "status.convert": "开始转换",
   "status.clear": "清除列表",
+  "status.clearDone": "清除已完成",
+  "status.stop": "停止",
+  "status.stopTitle": "当前文件完成后停止",
   "status.retry": "重试失败",
   "status.announce": "转换结束：完成 {success}、警告 {warning}、错误 {error}",
 
@@ -96,6 +99,7 @@
   "file.reveal": "在文件夹中显示",
   "file.restored": "已恢复原文件",
   "file.undo": "恢复",
+  "file.remove": "从列表移除",
   "file.undoTitle": "把原文件放回原处（本次运行期间有效）",
   "file.convertDoneWithWarnings": "转换完成（{warnings}）",
   "file.converting": "转换中…",

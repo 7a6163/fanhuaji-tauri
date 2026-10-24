@@ -117,8 +117,13 @@
         <span class="stat warn hidden" id="stat-warning"><span data-i18n="status.warning">警告:</span> <span class="n" id="count-warning">0</span></span>
         <span class="stat err"><span data-i18n="status.error">錯誤:</span> <span class="n" id="count-error">0</span></span>
         <span class="status-spacer"></span>
+        <button type="button" id="btn-clear-done" class="status-action hidden" data-i18n="status.clearDone">清除已完成</button>
         <button type="button" id="btn-clear" class="status-action" data-i18n="status.clear">清除列表</button>
         <button type="button" id="btn-retry" class="status-action hidden" data-i18n="status.retry">重試失敗</button>
+        <button type="button" id="btn-stop" class="status-action hidden" data-i18n-title="status.stopTitle" title="目前的檔案完成後停止">
+          <i aria-hidden="true" class="ti ti-player-stop-filled"></i>
+          <span data-i18n="status.stop">停止</span>
+        </button>
         <button type="button" id="btn-convert" class="status-action accent hidden">
           <i aria-hidden="true" class="ti ti-player-play-filled"></i>
           <span data-i18n="status.convert">開始轉換</span> <span id="convert-count"></span>

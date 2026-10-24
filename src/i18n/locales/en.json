@@ -15,6 +15,9 @@
   "status.error": "Error:",
   "status.convert": "Convert",
   "status.clear": "Clear list",
+  "status.clearDone": "Clear finished",
+  "status.stop": "Stop",
+  "status.stopTitle": "Stop after the current file",
   "status.retry": "Retry failed",
   "status.announce": "Conversion finished: {success} done, {warning} with warnings, {error} failed",
 
@@ -96,6 +99,7 @@
   "file.reveal": "Show in folder",
   "file.restored": "Original restored",
   "file.undo": "Undo",
+  "file.remove": "Remove from list",
   "file.undoTitle": "Put the original file back (until you quit the app)",
   "file.convertDoneWithWarnings": "Done ({warnings})",
   "file.converting": "Converting\u2026",

@@ -95,6 +95,11 @@ export function resetErrors(files: readonly FileEntry[]): FileEntry[] {
   );
 }
 
+/** Drop finished files (converted or restored), keeping pending, running and failed ones. */
+export function removeCompleted(files: readonly FileEntry[]): FileEntry[] {
+  return files.filter((f) => f.status !== "success" && f.status !== "restored");
+}
+
 export function countByStatus(files: readonly FileEntry[]) {
   const counts = { total: files.length, pending: 0, success: 0, warning: 0, error: 0 };
   for (const f of files) {
