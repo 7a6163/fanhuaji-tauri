@@ -400,6 +400,16 @@ describe("inlineDiff", () => {
     expect(changed(long.conv)).toEqual([`乙丙${"文".repeat(400)}`]);
   });
 
+  it("marks a long pure insertion or deletion on one side only", () => {
+    const inserted = "字".repeat(400);
+    const ins = inlineDiff("頭尾", `頭${inserted}尾`);
+    expect(changed(ins.orig)).toEqual([]);
+    expect(changed(ins.conv)).toEqual([inserted]);
+    const del = inlineDiff(`頭${inserted}尾`, "頭尾");
+    expect(changed(del.orig)).toEqual([inserted]);
+    expect(changed(del.conv)).toEqual([]);
+  });
+
   it("marks the whole middle when nothing in it is shared", () => {
     const d = inlineDiff("打开内存设置", "打開記憶體設定");
     expect(changed(d.orig)).toEqual(["开内存设置"]);
