@@ -26,7 +26,7 @@ zip = "2"
 quick-xml = { version = "0.42", features = ["escape-html"] }
 tempfile = "3"
 encoding_rs = "0.8"
-chardetng = "0.1"
+chardetng = "1.0"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
