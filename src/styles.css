@@ -1176,10 +1176,24 @@ textarea:focus {
 .diff-line.removed { background: var(--hover); }
 .diff-line.removed .diff-orig { text-decoration: line-through; opacity: 0.65; }
 .diff-orig {
-  font-size: 13px;
+  font-family: "Noto Sans TC Variable", "Noto Sans TC", sans-serif;
+  font-size: 14px;
   color: var(--text-muted);
   word-break: break-word;
   margin-bottom: 2px;
+}
+/* The replaced characters on the original line: quiet, but findable at a glance. */
+.diff-orig .chg {
+  color: var(--text);
+  background: var(--hover-strong);
+  border-radius: 3px;
+  padding: 0 1px;
+  text-decoration: line-through;
+  text-decoration-color: var(--text-muted);
+}
+.diff-conv:lang(zh-Hans) {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Noto Sans SC", sans-serif;
 }
 .diff-conv .chg {
   color: var(--accent);

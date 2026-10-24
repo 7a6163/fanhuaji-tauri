@@ -17,10 +17,12 @@ import {
   buildModuleOverrides,
   countByStatus,
   createRequestGuard,
+  type DiffSeg,
   escHtml,
   type FileEntry,
   fileExt,
   fileMessage,
+  inlineDiff,
   isEpubFile,
   isSafeUrl,
   parseFilePath,
@@ -277,20 +279,6 @@ function showEmptyPreview(): void {
 }
 
 // Highlight the differing middle of a changed line via common prefix/suffix.
-function lineDiff(original: string, converted: string): { pre: string; mid: string; suf: string } {
-  const al = original.length;
-  const bl = converted.length;
-  let p = 0;
-  while (p < al && p < bl && original[p] === converted[p]) p++;
-  let s = 0;
-  while (s < al - p && s < bl - p && original[al - 1 - s] === converted[bl - 1 - s]) s++;
-  return {
-    pre: converted.slice(0, p),
-    mid: converted.slice(p, bl - s),
-    suf: converted.slice(bl - s),
-  };
-}
-
 type DiffRow =
   | { t: "equal"; conv: string }
   | { t: "replace"; orig: string; conv: string }
@@ -362,7 +350,21 @@ function diffLines(o: string[], c: string[]): DiffRow[] {
   return rows;
 }
 
-function renderDiff(original: string, converted: string): { html: string; changedLines: number } {
+const segsHtml = (segs: DiffSeg[]): string =>
+  segs
+    .map((g) => (g.changed ? `<span class="chg">${escHtml(g.text)}</span>` : escHtml(g.text)))
+    .join("");
+
+// Simplified output gets a Simplified Chinese face; the bundled Noto Sans TC would draw
+// Traditional-style glyphs for characters both scripts share.
+const SIMPLIFIED_CONVERTERS = new Set(["Simplified", "China", "WikiSimplified"]);
+
+function renderDiff(
+  original: string,
+  converted: string,
+  converter: string,
+): { html: string; changedLines: number } {
+  const lang = SIMPLIFIED_CONVERTERS.has(converter) ? ' lang="zh-Hans"' : "";
   const rows = diffLines(original.split("\n"), converted.split("\n"));
   const out: string[] = [];
   let changedLines = 0;
@@ -371,21 +373,20 @@ function renderDiff(original: string, converted: string): { html: string; change
     if (r.t === "equal") {
       ln++;
       out.push(
-        `<div class="diff-line"><span class="diff-num">${ln}</span><div class="diff-conv">${escHtml(r.conv) || "&nbsp;"}</div></div>`,
+        `<div class="diff-line"><span class="diff-num">${ln}</span><div class="diff-conv"${lang}>${escHtml(r.conv) || "&nbsp;"}</div></div>`,
       );
     } else if (r.t === "replace") {
       ln++;
       changedLines++;
-      const d = lineDiff(r.orig, r.conv);
-      const conv = `${escHtml(d.pre)}<span class="chg">${escHtml(d.mid)}</span>${escHtml(d.suf)}`;
+      const d = inlineDiff(r.orig, r.conv);
       out.push(
-        `<div class="diff-line changed"><span class="diff-num">${ln}</span><div><div class="diff-orig">${escHtml(r.orig) || "&nbsp;"}</div><div class="diff-conv">${conv}</div></div></div>`,
+        `<div class="diff-line changed"><span class="diff-num">${ln}</span><div><div class="diff-orig">${segsHtml(d.orig) || "&nbsp;"}</div><div class="diff-conv"${lang}>${segsHtml(d.conv)}</div></div></div>`,
       );
     } else if (r.t === "insert") {
       ln++;
       changedLines++;
       out.push(
-        `<div class="diff-line added"><span class="diff-num">${ln}</span><div class="diff-conv"><span class="chg">${escHtml(r.conv) || "&nbsp;"}</span></div></div>`,
+        `<div class="diff-line added"><span class="diff-num">${ln}</span><div class="diff-conv"${lang}><span class="chg">${escHtml(r.conv) || "&nbsp;"}</span></div></div>`,
       );
     } else {
       out.push(
@@ -447,7 +448,7 @@ async function previewFile(file: FileEntry): Promise<void> {
     if (file.backupPath) params.inputPath = file.backupPath;
     const res = await invoke<PreviewResult>("preview_convert", { params });
     if (!isCurrent()) return;
-    const diff = renderDiff(res.original, res.converted);
+    const diff = renderDiff(res.original, res.converted, params.converter);
     const chars = [...res.original].length;
     previewStats.textContent = `${t("preview.stats", { chars: String(chars), changed: String(diff.changedLines) })}${res.truncated ? ` · ${t("preview.truncated")}` : ""}`;
     previewBody.innerHTML =
@@ -780,13 +781,15 @@ const closeModePop = wirePopover(modeMoreBtn, modePop, () => {
 function syncStatusMode(): void {
   statusMode.textContent = converterSelect.selectedOptions[0]?.text ?? "";
 }
+/** Re-run the preview for the selected file after a setting that changes the output. */
+function refreshPreview(): void {
+  const f = selectedId ? files.find((x) => x.id === selectedId) : undefined;
+  if (f) void previewFile(f);
+}
 converterSelect.addEventListener("change", () => {
   syncModeSeg();
   syncStatusMode();
-  if (selectedId) {
-    const f = files.find((x) => x.id === selectedId);
-    if (f) void previewFile(f);
-  }
+  refreshPreview();
 });
 syncModeSeg();
 syncStatusMode();
@@ -916,6 +919,11 @@ namingEl?.addEventListener("change", updateSuffixVisibility);
 updateSuffixVisibility();
 persistOnChange("post-replace", STORAGE_KEYS.postReplace);
 persistOnChange("protect-replace", STORAGE_KEYS.protectReplace);
+// Replace rules change the output too. "change" fires when the field loses focus,
+// so typing does not send a preview request per keystroke.
+for (const id of ["pre-replace", "post-replace", "protect-replace"]) {
+  document.getElementById(id)?.addEventListener("change", refreshPreview);
+}
 
 // Custom save folder picker
 const SAVE_FOLDER_KEY = "fanhuaji-save-folder";
@@ -1069,6 +1077,7 @@ function renderModuleList() {
       const name = sel.dataset.module ?? "";
       moduleSettings = { ...moduleSettings, [name]: sel.value };
       localStorage.setItem(STORAGE_KEYS.modules, JSON.stringify(moduleSettings));
+      refreshPreview();
     });
   });
 }
