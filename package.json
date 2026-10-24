@@ -20,7 +20,7 @@
     "@tauri-apps/cli": "^2.12.4",
     "@vitest/coverage-v8": "^4.1.2",
     "jsdom": "^29.0.1",
-    "typescript": "^5.6.0",
+    "typescript": "^7.0.2",
     "vite": "^6.0.0",
     "vitest": "^4.1.2"
   },
