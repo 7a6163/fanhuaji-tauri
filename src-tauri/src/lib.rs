@@ -454,9 +454,14 @@ pub(crate) fn decode_text(bytes: &[u8]) -> Result<(String, TextEncoding), String
             (detector.guess(None, true), false)
         }
     };
-    let (text, _, _) = encoding.decode(bytes);
+    let (text, _, had_errors) = encoding.decode(bytes);
     if text.contains('\0') {
         return Err("NOT_TEXT_FILE".to_string());
+    }
+    // Bytes invalid in the detected encoding would be written back as U+FFFD, in
+    // overwrite mode over the original.
+    if had_errors {
+        return Err(format!("DECODE_FAILED:{}", encoding.name()));
     }
     Ok((text.into_owned(), TextEncoding { encoding, bom }))
 }
@@ -536,8 +541,20 @@ impl Backups {
         })
     }
 
-    /// Copy `original` aside under `id` and return the copy's path.
+    /// Copy `original` aside under `id` and return the copy's path. A file converted again
+    /// before Undo (e.g. Retry after a failed restore) keeps its first backup: by then the
+    /// file on disk is already converted, and the first copy is the only true original.
     pub(crate) fn save(&self, id: &str, original: &Path) -> Result<PathBuf, String> {
+        if let Some((backup, prev)) = self
+            .entries
+            .lock()
+            .map_err(|_| "BACKUP_FAILED:lock")?
+            .get(id)
+            && prev == original
+            && backup.exists()
+        {
+            return Ok(backup.clone());
+        }
         let backup = tempfile::NamedTempFile::new_in(&self.dir)
             .and_then(|f| f.into_temp_path().keep().map_err(|e| e.error))
             .map_err(|e| format!("BACKUP_FAILED:{e}"))?;
@@ -780,6 +797,26 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "原文");
         assert!(!backup.exists());
         assert_eq!(backups.restore("id1").unwrap_err(), "BACKUP_NOT_FOUND");
+    }
+
+    #[test]
+    fn backups_keep_the_first_copy_when_saved_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let backups = Backups::new(dir.path().join("backups")).unwrap();
+        let path = dir.path().join("a.srt");
+        std::fs::write(&path, "原文").unwrap();
+        let first = backups.save("id1", &path).unwrap();
+        std::fs::write(&path, "converted").unwrap();
+        // Converted again before Undo: the backup must still hold the original.
+        assert_eq!(backups.save("id1", &path).unwrap(), first);
+        backups.restore("id1").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "原文");
+    }
+
+    #[test]
+    fn decode_text_rejects_invalid_bytes() {
+        let err = decode_text(b"\xEF\xBB\xBFok \xFF\xFE broken").unwrap_err();
+        assert_eq!(err, "DECODE_FAILED:UTF-8");
     }
 
     #[test]
