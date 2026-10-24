@@ -23,7 +23,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "time"] }
 zip = "2"
 # escape-html: chapters often use HTML entities (&nbsp;, &hellip;) that plain XML rejects.
-quick-xml = { version = "0.36", features = ["escape-html"] }
+quick-xml = { version = "0.42", features = ["escape-html"] }
 tempfile = "3"
 encoding_rs = "0.8"
 chardetng = "0.1"
