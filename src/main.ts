@@ -24,6 +24,7 @@ import {
   isEpubFile,
   isSafeUrl,
   parseFilePath,
+  removeCompleted,
   resetErrors,
   shouldResumeConversion,
 } from "./utils";
@@ -64,6 +65,10 @@ const STORAGE_KEYS = {
 
 let files: FileEntry[] = [];
 let isConverting = false;
+// Set by the Stop button; the batch loop exits before starting its next file.
+let stopRequested = false;
+// The last batch was stopped: keep the convert button up even with auto-convert on.
+let batchStopped = false;
 let moduleData: ModuleInfo[] = [];
 let moduleSettings: Record<string, string> = JSON.parse(
   localStorage.getItem(STORAGE_KEYS.modules) ?? "{}",
@@ -92,6 +97,8 @@ const countError = $<HTMLSpanElement>("#count-error");
 const countWarning = $<HTMLSpanElement>("#count-warning");
 const warningStat = $<HTMLSpanElement>("#stat-warning");
 const clearBtn = $<HTMLButtonElement>("#btn-clear");
+const clearDoneBtn = $<HTMLButtonElement>("#btn-clear-done");
+const stopBtn = $<HTMLButtonElement>("#btn-stop");
 const retryBtn = $<HTMLButtonElement>("#btn-retry");
 const convertBtn = $<HTMLButtonElement>("#btn-convert");
 const convertCount = $<HTMLSpanElement>("#convert-count");
@@ -170,9 +177,12 @@ function render() {
   const hasErrors = files.some((f) => f.status === "error");
   retryBtn.classList.toggle("hidden", !hasErrors);
 
-  // Show convert button when auto-convert is off and there are pending files
+  // Show convert button when auto-convert is off (or the last batch was stopped) and files are pending
   const hasPending = files.some((f) => f.status === "pending");
-  convertBtn.classList.toggle("hidden", isAutoConvert() || !hasPending || isConverting);
+  convertBtn.classList.toggle(
+    "hidden",
+    (isAutoConvert() && !batchStopped) || !hasPending || isConverting,
+  );
 
   // Counts
   const counts = countByStatus(files);
@@ -183,6 +193,11 @@ function render() {
   countError.textContent = String(counts.error);
   // Clearing mid-batch would hide files the running loop is still writing.
   clearBtn.disabled = isConverting;
+  stopBtn.classList.toggle("hidden", !isConverting);
+  stopBtn.disabled = stopRequested;
+  const doneCount = files.length - removeCompleted(files).length;
+  // Only worth a button when it clears less than "Clear list" would.
+  clearDoneBtn.classList.toggle("hidden", doneCount === 0 || doneCount === files.length);
   convertCount.textContent = counts.pending ? `(${counts.pending})` : "";
 
   // innerHTML replaces the cards, so put keyboard focus back where it was.
@@ -195,7 +210,7 @@ function render() {
   fileItems.innerHTML = files
     .map(
       (f) => `
-    <div class="file-card${f.id === selectedId ? " is-selected" : ""}" role="listitem" data-id="${escHtml(f.id)}">
+    <div class="file-card${f.id === selectedId ? " is-selected" : ""}${f.status === "converting" ? "" : " can-remove"}" role="listitem" data-id="${escHtml(f.id)}">
       <button type="button" class="fc-main"${f.id === selectedId ? ' aria-current="true"' : ""}>
         ${formatBadge(f.inputName)}
         <span class="fc-body">
@@ -211,7 +226,11 @@ function render() {
         f.status === "success" && f.outputPath
           ? `<button type="button" class="fc-reveal" data-reveal="${escHtml(f.id)}" title="${escHtml(t("file.reveal"))}" aria-label="${escHtml(t("file.reveal"))}"><i aria-hidden="true" class="ti ti-folder-open"></i></button>`
           : ""
-      }${statusIcon(f)}</div>
+      }${statusIcon(f)}${
+        f.status === "converting"
+          ? ""
+          : `<button type="button" class="fc-remove" data-remove="${escHtml(f.id)}" title="${escHtml(t("file.remove"))}" aria-label="${escHtml(t("file.remove"))}"><i aria-hidden="true" class="ti ti-x"></i></button>`
+      }</div>
     </div>`,
     )
     .join("");
@@ -507,13 +526,21 @@ async function convertPending() {
 
   const totalPending = pendingFiles.length;
   let completedCount = 0;
+  let stopped = false;
 
   isConverting = true;
+  batchStopped = false;
   if (progressTimeout) clearTimeout(progressTimeout);
   showProgress(0);
 
   try {
     for (const file of pendingFiles) {
+      if (stopRequested) break;
+      // Removed from the queue since the batch started.
+      if (!files.some((f) => f.id === file.id && f.status === "pending")) {
+        completedCount++;
+        continue;
+      }
       files = files.map((f) =>
         f.id === file.id ? { ...f, status: "converting" as const, message: "" } : f,
       );
@@ -558,6 +585,9 @@ async function convertPending() {
     }
   } finally {
     isConverting = false;
+    stopped = stopRequested;
+    batchStopped = stopped;
+    stopRequested = false;
     hideProgress();
     const c = countByStatus(files);
     announce(
@@ -572,7 +602,8 @@ async function convertPending() {
   // Files added mid-batch were skipped by the isConverting guard: pick them up
   // now, or re-render so the convert button reappears when auto-convert is off.
   render();
-  if (shouldResumeConversion(files, isAutoConvert())) void convertPending();
+  // A stopped batch leaves its files pending on purpose; don't restart it.
+  if (!stopped && shouldResumeConversion(files, isAutoConvert())) void convertPending();
 }
 
 // --- Settings drawer ---
@@ -606,6 +637,11 @@ $<HTMLDivElement>("#settings-backdrop").addEventListener("click", closeSettings)
 
 // Click a file card to load its diff preview in the right pane
 fileItems.addEventListener("click", async (e) => {
+  const remove = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-remove]");
+  if (remove) {
+    removeFile(remove.dataset.remove ?? "");
+    return;
+  }
   const reveal = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-reveal]");
   if (reveal) {
     const file = files.find((f) => f.id === reveal.dataset.reveal);
@@ -648,11 +684,19 @@ fileItems.addEventListener("click", async (e) => {
 
 // Up/Down move between cards; Tab still reaches each card's own buttons.
 fileItems.addEventListener("keydown", (e) => {
-  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const card = (e.target as HTMLElement).closest<HTMLElement>(".file-card");
   const mains = [...fileItems.querySelectorAll<HTMLElement>(".fc-main")];
-  const current = (e.target as HTMLElement).closest(".file-card")?.querySelector(".fc-main");
-  const i = mains.indexOf(current as HTMLElement);
+  const i = mains.indexOf(card?.querySelector(".fc-main") as HTMLElement);
   if (i < 0) return;
+  // Delete/Backspace removes the focused card and moves focus to its neighbour.
+  if ((e.key === "Delete" || e.key === "Backspace") && card?.classList.contains("can-remove")) {
+    e.preventDefault();
+    removeFile(card.dataset.id ?? "");
+    const rest = [...fileItems.querySelectorAll<HTMLElement>(".fc-main")];
+    rest[Math.min(i, rest.length - 1)]?.focus();
+    return;
+  }
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   e.preventDefault();
   mains[Math.max(0, Math.min(mains.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))]?.focus();
 });
@@ -986,6 +1030,22 @@ dropZone.addEventListener("keydown", (e) => {
 });
 
 $<HTMLButtonElement>("#btn-add-more").addEventListener("click", openFiles);
+
+stopBtn.addEventListener("click", () => {
+  stopRequested = true;
+  render();
+});
+
+clearDoneBtn.addEventListener("click", () => {
+  files = removeCompleted(files);
+  render();
+});
+
+/** Remove one file from the queue; the file being converted stays. */
+function removeFile(id: string): void {
+  files = files.filter((f) => f.id !== id || f.status === "converting");
+  render();
+}
 
 clearBtn.addEventListener("click", () => {
   files = [];

@@ -11,6 +11,7 @@ import {
   isEpubFile,
   isSafeUrl,
   parseFilePath,
+  removeCompleted,
   resetErrors,
   shouldResumeConversion,
 } from "../utils";
@@ -369,3 +370,17 @@ describe("isEpubFile", () => {
 // --- fileTooltip ---
 
 // --- statusDotHtml ---
+
+describe("removeCompleted", () => {
+  it("keeps pending, converting and failed files, drops finished ones", () => {
+    const files = [
+      makeFile({ id: "p", status: "pending" }),
+      makeFile({ id: "c", status: "converting" }),
+      makeFile({ id: "s", status: "success" }),
+      makeFile({ id: "w", status: "success", message: "部分章節失敗" }),
+      makeFile({ id: "e", status: "error" }),
+      makeFile({ id: "r", status: "restored" }),
+    ];
+    expect(removeCompleted(files).map((f) => f.id)).toEqual(["p", "c", "e"]);
+  });
+});
