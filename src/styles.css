@@ -247,7 +247,8 @@ html[lang="en"] .brand-sub { display: none; }
   padding: 3px;
   gap: 2px;
 }
-.mode-seg button {
+.mode-seg > button,
+.mode-more-btn {
   border: none;
   background: transparent;
   cursor: pointer;
@@ -259,13 +260,20 @@ html[lang="en"] .brand-sub { display: none; }
   font-weight: 500;
   white-space: nowrap;
 }
-.mode-seg button:hover { color: var(--text); }
-.mode-seg button[aria-pressed="true"] {
+.mode-seg > button:hover,
+.mode-more-btn:hover { color: var(--text); }
+.mode-seg > button[aria-pressed="true"],
+.mode-more-btn[aria-pressed="true"] {
   background: var(--surface);
   color: var(--accent);
   box-shadow: var(--shadow-sm);
   font-weight: 600;
 }
+
+/* "More" holds the less common converters; its popover reuses the out-pop styles. */
+.mode-more-wrap { position: relative; display: flex; }
+.mode-more-btn { display: inline-flex; align-items: center; gap: 4px; }
+.mode-more-wrap .out-pop { min-width: 180px; }
 
 /* Toolbar: output-naming pill + custom popover */
 .out-pill-wrap { position: relative; }
@@ -331,6 +339,8 @@ html[lang="en"] .brand-sub { display: none; }
 .oo-check { color: var(--accent); font-size: 15px; opacity: 0; }
 .out-opt[aria-checked="true"] .oo-title { color: var(--accent); font-weight: 600; }
 .out-opt[aria-checked="true"] .oo-check { opacity: 1; }
+.out-pop { max-width: 300px; }
+.out-pop .oo-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .icon-btn {
   width: 32px;
@@ -873,11 +883,11 @@ html[lang="en"] .brand-sub { display: none; }
   margin-top: 0;
 }
 
-.suffix-input-wrapper {
-  margin-top: 8px;
-}
+/* Suffix field shown under "Custom suffix" in the output popover. */
+.oo-suffix { padding: 2px 9px 8px; }
+.oo-suffix .setting-label { margin-top: 0; }
 
-.suffix-input-wrapper input[type="text"] {
+.oo-suffix input[type="text"] {
   width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--border);
@@ -888,7 +898,7 @@ html[lang="en"] .brand-sub { display: none; }
   font-family: inherit;
 }
 
-.suffix-input-wrapper input[type="text"]:focus {
+.oo-suffix input[type="text"]:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
@@ -1199,7 +1209,8 @@ textarea:focus {
 @media (max-width: 720px) {
   .brand-text { display: none; }
   #out-pill-label { display: none; }
-  .mode-seg button { padding: 5px 9px; }
+  .mode-seg > button,
+  .mode-more-btn { padding: 5px 9px; }
 }
 
 /* Reduced motion: panels fade instead of sliding; the spinner pulses in place. */

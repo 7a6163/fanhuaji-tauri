@@ -22,37 +22,126 @@
             <button type="button" data-converter="Taiwan" data-i18n="converter.short.Taiwan" data-i18n-title="converter.Taiwan">台灣化</button>
             <button type="button" data-converter="Hongkong" data-i18n="converter.short.Hongkong" data-i18n-title="converter.Hongkong">香港化</button>
             <button type="button" data-converter="Simplified" data-i18n="converter.short.Simplified" data-i18n-title="converter.Simplified">簡體化</button>
+            <div class="mode-more-wrap">
+              <button type="button" id="mode-more-btn" class="mode-more-btn" aria-haspopup="menu" aria-expanded="false">
+                <span id="mode-more-label" data-i18n="converter.more">更多</span>
+                <i aria-hidden="true" class="ti ti-chevron-down out-pill-caret"></i>
+              </button>
+              <div id="mode-pop" class="out-pop hidden" role="menu" aria-label="更多轉換模式" data-i18n-aria-label="converter.moreLabel">
+                <div class="out-pop-group" data-i18n="converter.group.localize">本地化</div>
+                <button type="button" class="out-opt" data-converter="China" role="menuitemradio" aria-checked="false">
+                  <span class="oo-body"><span class="oo-title" data-i18n="converter.China">中國化</span></span>
+                  <i aria-hidden="true" class="ti ti-check oo-check"></i>
+                </button>
+                <div class="out-pop-group" data-i18n="converter.group.other">其他</div>
+                <button type="button" class="out-opt" data-converter="Bopomofo" role="menuitemradio" aria-checked="false">
+                  <span class="oo-body"><span class="oo-title" data-i18n="converter.Bopomofo">注音化</span></span>
+                  <i aria-hidden="true" class="ti ti-check oo-check"></i>
+                </button>
+                <button type="button" class="out-opt" data-converter="Mars" role="menuitemradio" aria-checked="false">
+                  <span class="oo-body"><span class="oo-title" data-i18n="converter.Mars">火星化</span></span>
+                  <i aria-hidden="true" class="ti ti-check oo-check"></i>
+                </button>
+                <button type="button" class="out-opt" data-converter="Pinyin" role="menuitemradio" aria-checked="false">
+                  <span class="oo-body"><span class="oo-title" data-i18n="converter.Pinyin">拼音化</span></span>
+                  <i aria-hidden="true" class="ti ti-check oo-check"></i>
+                </button>
+                <div class="out-pop-group" data-i18n="converter.group.thirdParty">第三方服務</div>
+                <button type="button" class="out-opt" data-converter="WikiSimplified" role="menuitemradio" aria-checked="false">
+                  <span class="oo-body"><span class="oo-title" data-i18n="converter.WikiSimplified">維基簡體化</span></span>
+                  <i aria-hidden="true" class="ti ti-check oo-check"></i>
+                </button>
+                <button type="button" class="out-opt" data-converter="WikiTraditional" role="menuitemradio" aria-checked="false">
+                  <span class="oo-body"><span class="oo-title" data-i18n="converter.WikiTraditional">維基繁體化</span></span>
+                  <i aria-hidden="true" class="ti ti-check oo-check"></i>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="out-pill-wrap">
-            <button type="button" id="out-pill-btn" class="out-pill-btn" aria-haspopup="menu" aria-expanded="false">
+            <button type="button" id="out-pill-btn" class="out-pill-btn" aria-haspopup="dialog" aria-expanded="false">
               <i aria-hidden="true" class="ti ti-folder"></i>
               <span id="out-pill-label">自訂後綴</span>
               <i aria-hidden="true" class="ti ti-chevron-down out-pill-caret"></i>
             </button>
-            <div id="out-pop" class="out-pop hidden" role="menu" aria-label="輸出方式" data-i18n-aria-label="naming.title">
-              <div class="out-pop-group" data-i18n="naming.title">輸出方式</div>
-              <button type="button" class="out-opt" data-naming="auto" role="menuitemradio" aria-checked="false">
+            <div id="out-pop" class="out-pop hidden" role="dialog" aria-label="輸出方式" data-i18n-aria-label="naming.title">
+              <div class="out-pop-group" id="naming-group-label" data-i18n="naming.title">輸出方式</div>
+              <div role="radiogroup" aria-labelledby="naming-group-label">
+              <button type="button" class="out-opt" data-naming="auto" role="radio" aria-checked="false">
                 <div class="oo-body">
                   <div class="oo-title" data-i18n="settings.save.naming.auto">自動命名</div>
                   <div class="oo-desc" data-i18n="settings.save.naming.autoDesc">檔名加上轉換模式，例：字幕.Taiwan.srt</div>
                 </div>
                 <i aria-hidden="true" class="ti ti-check oo-check"></i>
               </button>
-              <button type="button" class="out-opt" data-naming="suffix" role="menuitemradio" aria-checked="false">
+              <button type="button" class="out-opt" data-naming="suffix" role="radio" aria-checked="false">
                 <div class="oo-body">
                   <div class="oo-title" data-i18n="settings.save.naming.suffix">自訂後綴</div>
                   <div class="oo-desc" data-i18n="settings.save.naming.suffixDesc">在原檔名後加標記，不覆蓋</div>
                 </div>
                 <i aria-hidden="true" class="ti ti-check oo-check"></i>
               </button>
-              <button type="button" class="out-opt" data-naming="overwrite" role="menuitemradio" aria-checked="false">
+              <div id="suffix-input-wrapper" class="oo-suffix hidden">
+                <label class="setting-label" for="custom-suffix" data-i18n="settings.save.suffixLabel">後綴名稱</label>
+                <input type="text" id="custom-suffix" placeholder="converted" value="converted" />
+              </div>
+              <button type="button" class="out-opt" data-naming="overwrite" role="radio" aria-checked="false">
                 <div class="oo-body">
                   <div class="oo-title" data-i18n="settings.save.naming.overwrite">覆蓋原檔</div>
                   <div class="oo-desc" data-i18n="settings.save.naming.overwriteDesc">直接寫回，本次執行期間可復原</div>
                 </div>
                 <i aria-hidden="true" class="ti ti-check oo-check"></i>
               </button>
+              </div>
+              <div class="out-pop-group" id="folder-group-label" data-i18n="settings.save.folderLabel">存檔資料夾</div>
+              <div role="radiogroup" aria-labelledby="folder-group-label">
+              <button type="button" class="out-opt" data-folder="same" role="radio" aria-checked="false">
+                <div class="oo-body">
+                  <div class="oo-title" data-i18n="settings.save.same">輸入檔所在資料夾</div>
+                </div>
+                <i aria-hidden="true" class="ti ti-check oo-check"></i>
+              </button>
+              <button type="button" class="out-opt" data-folder="custom" role="radio" aria-checked="false">
+                <div class="oo-body">
+                  <div class="oo-title" data-i18n="settings.save.customTitle">自訂資料夾</div>
+                  <div class="oo-desc" id="oo-folder-path"></div>
+                </div>
+                <i aria-hidden="true" class="ti ti-check oo-check"></i>
+              </button>
+              </div>
             </div>
+          </div>
+          <!-- Settings state: the toolbar popovers drive these; convert params and persistence read them. -->
+          <div hidden>
+            <select id="converter">
+              <optgroup label="繁簡" data-i18n-label="converter.group.traditional">
+                <option value="Traditional" data-i18n="converter.Traditional">繁體化</option>
+                <option value="Simplified" data-i18n="converter.Simplified">簡體化</option>
+              </optgroup>
+              <optgroup label="本地化" data-i18n-label="converter.group.localize">
+                <option value="China" data-i18n="converter.China">中國化</option>
+                <option value="Hongkong" data-i18n="converter.Hongkong">香港化</option>
+                <option value="Taiwan" selected data-i18n="converter.Taiwan">台灣化</option>
+              </optgroup>
+              <optgroup label="其他" data-i18n-label="converter.group.other">
+                <option value="Bopomofo" data-i18n="converter.Bopomofo">注音化</option>
+                <option value="Mars" data-i18n="converter.Mars">火星化</option>
+                <option value="Pinyin" data-i18n="converter.Pinyin">拼音化</option>
+              </optgroup>
+              <optgroup label="第三方服務" data-i18n-label="converter.group.thirdParty">
+                <option value="WikiSimplified" data-i18n="converter.WikiSimplified">維基簡體化</option>
+                <option value="WikiTraditional" data-i18n="converter.WikiTraditional">維基繁體化</option>
+              </optgroup>
+            </select>
+            <select id="save-folder">
+              <option value="same" data-i18n="settings.save.same">輸入檔所在資料夾</option>
+              <option value="custom" data-i18n="settings.save.custom">自訂資料夾…</option>
+            </select>
+            <select id="naming">
+              <option value="auto" data-i18n="settings.save.naming.auto">自動命名</option>
+              <option value="suffix" data-i18n="settings.save.naming.suffix">自訂後綴</option>
+              <option value="overwrite" data-i18n="settings.save.naming.overwrite">覆蓋原檔</option>
+            </select>
           </div>
           <button type="button" id="btn-settings" class="icon-btn" data-i18n-title="header.settings" title="設定" aria-label="設定" data-i18n-aria-label="header.settings">
             <i aria-hidden="true" class="ti ti-settings"></i>
@@ -137,59 +226,13 @@
           </button>
         </div>
         <nav class="drawer-tabs" role="tablist">
-          <button type="button" class="drawer-tab active" role="tab" id="tab-convert" aria-controls="panel-convert" aria-selected="true" tabindex="0" data-drawer-tab="convert" data-i18n="settings.tab.convert">轉換</button>
-          <button type="button" class="drawer-tab" role="tab" id="tab-replace" aria-controls="panel-replace" aria-selected="false" tabindex="-1" data-drawer-tab="replace" data-i18n="settings.tab.replace">取代</button>
+          <button type="button" class="drawer-tab active" role="tab" id="tab-replace" aria-controls="panel-replace" aria-selected="true" tabindex="0" data-drawer-tab="replace" data-i18n="settings.tab.replace">取代</button>
           <button type="button" class="drawer-tab" role="tab" id="tab-modules" aria-controls="panel-modules" aria-selected="false" tabindex="-1" data-drawer-tab="modules" data-i18n="settings.tab.modules">模組</button>
           <button type="button" class="drawer-tab" role="tab" id="tab-general" aria-controls="panel-general" aria-selected="false" tabindex="-1" data-drawer-tab="general" data-i18n="settings.tab.general">一般</button>
         </nav>
         <div class="drawer-body">
-          <!-- 轉換 -->
-          <div class="drawer-panel active" role="tabpanel" id="panel-convert" aria-labelledby="tab-convert" data-panel="convert">
-            <section class="setting-section">
-              <h3><i aria-hidden="true" class="ti ti-transform"></i> <span id="converter-title" data-i18n="settings.converter.title">轉換模式</span></h3>
-              <select id="converter" aria-labelledby="converter-title">
-                <optgroup label="繁簡" data-i18n-label="converter.group.traditional">
-                  <option value="Traditional" data-i18n="converter.Traditional">繁體化</option>
-                  <option value="Simplified" data-i18n="converter.Simplified">簡體化</option>
-                </optgroup>
-                <optgroup label="本地化" data-i18n-label="converter.group.localize">
-                  <option value="China" data-i18n="converter.China">中國化</option>
-                  <option value="Hongkong" data-i18n="converter.Hongkong">香港化</option>
-                  <option value="Taiwan" selected data-i18n="converter.Taiwan">台灣化</option>
-                </optgroup>
-                <optgroup label="其他" data-i18n-label="converter.group.other">
-                  <option value="Bopomofo" data-i18n="converter.Bopomofo">注音化</option>
-                  <option value="Mars" data-i18n="converter.Mars">火星化</option>
-                  <option value="Pinyin" data-i18n="converter.Pinyin">拼音化</option>
-                </optgroup>
-                <optgroup label="第三方服務" data-i18n-label="converter.group.thirdParty">
-                  <option value="WikiSimplified" data-i18n="converter.WikiSimplified">維基簡體化</option>
-                  <option value="WikiTraditional" data-i18n="converter.WikiTraditional">維基繁體化</option>
-                </optgroup>
-              </select>
-            </section>
-            <section class="setting-section">
-              <h3><i aria-hidden="true" class="ti ti-folder"></i> <span data-i18n="settings.save.title">存檔選項</span></h3>
-              <label class="setting-label" for="save-folder" data-i18n="settings.save.folderLabel">存檔資料夾</label>
-              <select id="save-folder">
-                <option value="same" data-i18n="settings.save.same">輸入檔所在資料夾</option>
-                <option value="custom" data-i18n="settings.save.custom">自訂資料夾…</option>
-              </select>
-              <label class="setting-label" for="naming" data-i18n="settings.save.namingLabel">命名方式</label>
-              <select id="naming">
-                <option value="auto" data-i18n="settings.save.naming.auto">自動命名</option>
-                <option value="suffix" data-i18n="settings.save.naming.suffix">自訂後綴</option>
-                <option value="overwrite" data-i18n="settings.save.naming.overwrite">覆蓋原檔</option>
-              </select>
-              <div id="suffix-input-wrapper" class="suffix-input-wrapper hidden">
-                <label class="setting-label" for="custom-suffix" data-i18n="settings.save.suffixLabel">後綴名稱</label>
-                <input type="text" id="custom-suffix" placeholder="converted" value="converted" />
-              </div>
-            </section>
-          </div>
-
           <!-- 取代 -->
-          <div class="drawer-panel" role="tabpanel" id="panel-replace" aria-labelledby="tab-replace" data-panel="replace">
+          <div class="drawer-panel active" role="tabpanel" id="panel-replace" aria-labelledby="tab-replace" data-panel="replace">
             <section class="setting-section">
               <h3><i aria-hidden="true" class="ti ti-replace"></i> <span data-i18n="settings.replace.title">自訂取代</span></h3>
               <label class="setting-label" for="pre-replace" data-i18n="settings.replace.preLabel">轉換前取代</label>
