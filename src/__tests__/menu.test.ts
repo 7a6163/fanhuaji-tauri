@@ -18,7 +18,7 @@ type Item = {
 
 describe("setAppMenu", () => {
   it("installs a menu whose shortcuts run the app's actions", async () => {
-    const actions = { openFiles: vi.fn(), openSettings: vi.fn(), convert: vi.fn() };
+    const actions = { openFiles: vi.fn(), openSettings: vi.fn(), convert: vi.fn(), quit: vi.fn() };
     await setAppMenu(actions);
 
     expect(setAsAppMenu).toHaveBeenCalled();
@@ -29,13 +29,16 @@ describe("setAppMenu", () => {
     byKey("CmdOrCtrl+O")?.action?.();
     byKey("CmdOrCtrl+,")?.action?.();
     byKey("CmdOrCtrl+Enter")?.action?.();
+    byKey("CmdOrCtrl+Q")?.action?.();
     expect(actions.openFiles).toHaveBeenCalled();
     expect(actions.openSettings).toHaveBeenCalled();
     expect(actions.convert).toHaveBeenCalled();
+    // Quit goes through the app so it can confirm before losing Undo.
+    expect(actions.quit).toHaveBeenCalled();
 
     // The Edit items are what give text fields copy/paste on macOS.
     const predefined = all.map((i) => i.item);
-    for (const name of ["Copy", "Paste", "SelectAll", "Undo", "Quit"]) {
+    for (const name of ["Copy", "Paste", "SelectAll", "Undo"]) {
       expect(predefined).toContain(name);
     }
   });

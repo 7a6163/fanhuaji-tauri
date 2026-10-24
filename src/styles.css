@@ -762,7 +762,7 @@ html[lang="en"] .brand-sub { display: none; }
 
 .status-action.accent {
   background: var(--accent);
-  color: #fff;
+  color: var(--surface);
   font-weight: 600;
   padding: 5px 14px;
   box-shadow: var(--shadow-sm);
@@ -1197,8 +1197,6 @@ textarea:focus {
   background: var(--hover-strong);
   border-radius: 3px;
   padding: 0 1px;
-  text-decoration: line-through;
-  text-decoration-color: var(--text-muted);
 }
 .diff-conv:lang(zh-Hans) {
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
@@ -1322,3 +1320,61 @@ textarea:focus {
 .action-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 /* Darken in place: --accent-deep under dark-theme text would fall below AA. */
 .action-btn.primary:hover { background: var(--accent); filter: brightness(0.92); }
+
+.app-dialog-warning {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-weak);
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.5;
+}
+.action-btn.primary:disabled { opacity: 0.45; cursor: default; filter: none; }
+
+/* Update found at startup: a quiet cue, opened on the user's terms. */
+.update-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.update-chip .ti { color: var(--accent); }
+.update-chip:hover { border-color: var(--border-strong); background: var(--hover); }
+@media (max-width: 720px) {
+  #update-chip-label { display: none; }
+}
+
+/* Auto-convert indicator in the output pill. */
+#out-pill-auto { font-size: 13px; color: var(--accent); }
+.oo-toggle { padding: 4px 9px 8px; }
+
+/* Receipt is stale: the settings changed after this file was saved. */
+.preview-stale {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-weak);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.preview-stale span { flex: 1; min-width: 0; }
+.preview-stale .pane-act { flex-shrink: 0; }
+
+/* Overwrite + auto-convert: the drop overlay warns before files are released. */
+.drop-overlay.is-warning .drop-overlay-frame {
+  border-style: solid;
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+.drop-overlay-frame span { max-width: 32em; padding: 0 16px; text-align: center; }

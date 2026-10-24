@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { check, type Update } from "@tauri-apps/plugin-updater";
-import { checkForUpdates, confirmUpdate, initUpdater } from "../updater";
+import { checkForUpdates, initUpdater, installPendingUpdate } from "../updater";
 
 const mockCheck = vi.mocked(check);
 const mockInvoke = vi.mocked(invoke);
@@ -223,41 +223,68 @@ describe("updater", () => {
     });
   });
 
-  describe("confirmUpdate", () => {
-    // jsdom has no showModal; stand in for the user picking a button.
-    function mountDialog(answer: string) {
-      document.body.innerHTML += `
-        <dialog id="update-dialog">
-          <h2 id="update-dialog-title"></h2>
-          <pre id="update-dialog-notes" hidden></pre>
-        </dialog>`;
-      const dialog = document.getElementById("update-dialog") as HTMLDialogElement;
-      dialog.showModal = vi.fn(() => {
-        dialog.returnValue = answer;
-        dialog.dispatchEvent(new Event("close"));
-      });
-      return dialog;
-    }
+  describe("startup check and install guards", () => {
+    const update = () =>
+      ({
+        version: "2.5.0",
+        downloadAndInstall: vi.fn().mockResolvedValue(undefined),
+      }) as unknown as Update & {
+        downloadAndInstall: ReturnType<typeof vi.fn>;
+      };
 
-    it("resolves true when Install is chosen and shows the notes", async () => {
-      const dialog = mountDialog("install");
-      await expect(confirmUpdate("2.5.0", "  Faster previews  ")).resolves.toBe(true);
-      expect(dialog.querySelector("#update-dialog-title")?.textContent).toContain("2.5.0");
-      const notes = dialog.querySelector<HTMLElement>("#update-dialog-notes");
-      expect(notes?.textContent).toBe("Faster previews");
-      expect(notes?.hidden).toBe(false);
+    it("leaves a cue instead of a dialog when the startup check finds an update", async () => {
+      const u = update();
+      mockCheck.mockResolvedValue(u);
+      const confirmSpy = vi.spyOn(window, "confirm");
+      const onAvailable = vi.fn();
+      initUpdater({ onAvailable });
+      await vi.waitFor(() => expect(onAvailable).toHaveBeenCalledWith("2.5.0"));
+      expect(confirmSpy).not.toHaveBeenCalled();
+
+      confirmSpy.mockReturnValue(true);
+      await installPendingUpdate();
+      expect(u.downloadAndInstall).toHaveBeenCalled();
     });
 
-    it("resolves false on Later or Escape and hides empty notes", async () => {
-      const dialog = mountDialog("");
-      await expect(confirmUpdate("2.5.0")).resolves.toBe(false);
-      expect(dialog.querySelector<HTMLElement>("#update-dialog-notes")?.hidden).toBe(true);
+    it("blocks the restart while a batch is converting", async () => {
+      const u = update();
+      mockCheck.mockResolvedValue(u);
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      initUpdater({ getRisk: () => ({ converting: true, undoable: 0 }), onAvailable: vi.fn() });
+      await vi.waitFor(() => expect(mockCheck).toHaveBeenCalled());
+      await installPendingUpdate();
+      expect(u.downloadAndInstall).not.toHaveBeenCalled();
     });
 
-    it("falls back to window.confirm without the dialog", async () => {
-      const spy = vi.spyOn(window, "confirm").mockReturnValue(true);
-      await expect(confirmUpdate("2.5.0")).resolves.toBe(true);
-      expect(spy).toHaveBeenCalled();
+    it("does nothing when there is no pending update", async () => {
+      vi.resetModules();
+      const fresh = await import("../updater");
+      const confirmSpy = vi.spyOn(window, "confirm");
+      await fresh.installPendingUpdate();
+      expect(confirmSpy).not.toHaveBeenCalled();
+    });
+
+    it("shows the failure when installing the pending update fails", async () => {
+      const u = update();
+      u.downloadAndInstall.mockRejectedValue(new Error("disk full"));
+      mockCheck.mockResolvedValue(u);
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      const onAvailable = vi.fn();
+      initUpdater({ onAvailable });
+      await vi.waitFor(() => expect(onAvailable).toHaveBeenCalled());
+      await installPendingUpdate();
+      expect(document.getElementById("update-status")?.textContent).toContain("disk full");
+    });
+
+    it("warns that overwritten files lose Undo", async () => {
+      const u = update();
+      mockCheck.mockResolvedValue(u);
+      const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+      initUpdater({ getRisk: () => ({ converting: false, undoable: 3 }) });
+      await checkForUpdates(false);
+      const calls = confirmSpy.mock.calls;
+      expect(calls[calls.length - 1]?.[0]).toContain("3");
+      expect(u.downloadAndInstall).not.toHaveBeenCalled();
     });
   });
 });

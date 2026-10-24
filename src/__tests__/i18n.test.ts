@@ -56,9 +56,7 @@ describe("t", () => {
 
   it("interpolates in English locale", () => {
     setLocale("en");
-    expect(t("update.confirm", { version: "2.0.0" })).toBe(
-      "New version 2.0.0 is available. Download and install?",
-    );
+    expect(t("update.found", { version: "2.0.0" })).toBe("New version 2.0.0 available");
   });
 
   it("handles param with $ character safely", () => {

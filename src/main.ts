@@ -10,10 +10,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { exit } from "@tauri-apps/plugin-process";
+import { confirmDialog } from "./dialog";
 import { getLocale, initI18n, type Locale, setLocale, t, translateError } from "./i18n/i18n";
 import { setAppMenu } from "./menu";
 import { initTheme } from "./theme";
-import { initUpdater } from "./updater";
+import { initUpdater, installPendingUpdate } from "./updater";
 import {
   buildModuleOverrides,
   countByStatus,
@@ -110,6 +112,7 @@ const statusMode = $<HTMLSpanElement>("#status-mode");
 const autoConvertCheckbox = $<HTMLInputElement>("#auto-convert");
 const srStatus = $<HTMLDivElement>("#sr-status");
 const dropOverlay = $<HTMLDivElement>("#drop-overlay");
+const dropOverlayText = $<HTMLSpanElement>("#drop-overlay-text");
 
 // --- Auto-convert ---
 
@@ -121,6 +124,7 @@ function isAutoConvert(): boolean {
 autoConvertCheckbox.checked = isAutoConvert();
 autoConvertCheckbox.addEventListener("change", () => {
   localStorage.setItem(STORAGE_KEYS.autoConvert, String(autoConvertCheckbox.checked));
+  syncOutPill();
   render();
 });
 
@@ -460,9 +464,28 @@ function readConvertParams(file: FileEntry) {
   };
 }
 
-// Previews that came back with a conversion, keyed by file id, with the converter
-// that produced them. Cleared when a setting that changes the output changes.
-const previewCache = new Map<string, { res: PreviewResult; converter: string }>();
+// What each finished file was saved as: the preview that came back with its conversion,
+// the converter, and the settings used. A finished file always shows this receipt, even
+// after settings change, so the pane never shows text that is not on disk.
+interface SavedPreview {
+  res: PreviewResult;
+  converter: string;
+  settings: string;
+}
+const previewCache = new Map<string, SavedPreview>();
+const previewStale = $<HTMLDivElement>("#preview-stale");
+const reconvertBtn = $<HTMLButtonElement>("#btn-reconvert");
+
+/** The settings that change a conversion's output, to tell when a receipt is stale. */
+function outputSettings(p: ReturnType<typeof readConvertParams>): string {
+  return JSON.stringify([p.converter, p.preReplace, p.postReplace, p.protectReplace, p.modules]);
+}
+
+function converterName(value: string): string {
+  return (
+    converterSelect.querySelector<HTMLOptionElement>(`option[value="${value}"]`)?.text ?? value
+  );
+}
 
 function showPreviewResult(res: PreviewResult, converter: string): void {
   const diff = renderDiff(res.original, res.converted, converter);
@@ -500,9 +523,16 @@ async function previewFile(file: FileEntry): Promise<void> {
     return;
   }
 
-  const cached = previewCache.get(file.id);
-  if (cached) {
-    showPreviewResult(cached.res, cached.converter);
+  previewStale.classList.add("hidden");
+  const saved = file.status === "success" ? previewCache.get(file.id) : undefined;
+  if (saved) {
+    showPreviewResult(saved.res, saved.converter);
+    previewStats.textContent = `${t("preview.saved", { mode: converterName(saved.converter) })} · ${previewStats.textContent}`;
+    previewStale.classList.toggle(
+      "hidden",
+      saved.settings === outputSettings(readConvertParams(file)),
+    );
+    reconvertBtn.disabled = isConverting;
     return;
   }
 
@@ -526,6 +556,33 @@ async function previewFile(file: FileEntry): Promise<void> {
     previewBody.innerHTML = `<div class="preview-error"><i aria-hidden="true" class="ti ti-alert-triangle"></i> ${escHtml(translateError(String(err)))}</div>`;
   }
 }
+
+// Reconvert a finished file with the current settings. An overwritten file gets its
+// original back first, so the backup is never replaced by already-converted text.
+reconvertBtn.addEventListener("click", async () => {
+  const file = files.find((f) => f.id === selectedId);
+  if (!file || isConverting) return;
+  try {
+    if (file.backupPath) await invoke("restore_backup", { fileId: file.id });
+  } catch (err) {
+    files = files.map((f) =>
+      f.id === file.id
+        ? { ...f, status: "error" as const, message: translateError(String(err)) }
+        : f,
+    );
+    render();
+    return;
+  }
+  previewCache.delete(file.id);
+  files = files.map((f) =>
+    f.id === file.id ? { ...f, status: "pending" as const, message: "", backupPath: undefined } : f,
+  );
+  batchStopped = false;
+  // Start first so the file is already converting when the preview asks, and waits for
+  // its own result instead of fetching one.
+  void convertPending(file.id);
+  void previewFile(files.find((f) => f.id === file.id) as FileEntry);
+});
 
 // --- Progress ---
 
@@ -586,10 +643,11 @@ async function openFiles() {
 
 // --- Convert ---
 
-async function convertPending() {
+/** Convert pending files in order; `only` limits the batch to one file (Reconvert). */
+async function convertPending(only?: string) {
   if (isConverting) return;
 
-  const pendingFiles = files.filter((f) => f.status === "pending");
+  const pendingFiles = files.filter((f) => f.status === "pending" && (!only || f.id === only));
   if (pendingFiles.length === 0) return;
 
   const totalPending = pendingFiles.length;
@@ -624,7 +682,11 @@ async function convertPending() {
           preview?: PreviewResult;
         } = await invoke(isEpubFile(file.inputName) ? "convert_epub" : "convert_file", { params });
         if (result.preview) {
-          previewCache.set(file.id, { res: result.preview, converter: params.converter });
+          previewCache.set(file.id, {
+            res: result.preview,
+            converter: params.converter,
+            settings: outputSettings(params),
+          });
         }
 
         files = files.map((f) =>
@@ -741,6 +803,7 @@ fileItems.addEventListener("click", async (e) => {
     undo.disabled = true;
     try {
       await invoke("restore_backup", { fileId: id });
+      previewCache.delete(id ?? "");
       files = files.map((f) =>
         f.id === id ? { ...f, status: "restored" as const, message: "", backupPath: undefined } : f,
       );
@@ -859,8 +922,6 @@ function syncStatusMode(): void {
 }
 /** Re-run the preview for the selected file after a setting that changes the output. */
 function refreshPreview(): void {
-  // Every cached preview was made with the old settings.
-  previewCache.clear();
   const f = selectedId ? files.find((x) => x.id === selectedId) : undefined;
   if (f) void previewFile(f);
 }
@@ -897,7 +958,11 @@ function syncOutPill(): void {
   const base = folder.split(/[\\/]/).filter(Boolean).pop();
   outPillLabel.textContent = base ? `${naming} · ${base}` : naming;
   // The label is hidden in narrow windows; keep the button's name and tooltip.
-  const full = folder ? `${naming} · ${folder}` : naming;
+  const auto = isAutoConvert();
+  document.getElementById("out-pill-auto")?.classList.toggle("hidden", !auto);
+  const full = [naming, folder, auto ? t("settings.behavior.autoConvert") : ""]
+    .filter(Boolean)
+    .join(" · ");
   outPillBtn.setAttribute("aria-label", full);
   outPillBtn.title = full;
   outPillBtn.classList.toggle("is-overwrite", namingSelect.value === "overwrite");
@@ -1230,6 +1295,15 @@ void getCurrentWebviewWindow().onDragDropEvent((event) => {
   const dragging = type === "enter" || type === "over";
   dropZone.classList.toggle("drag-over", dragging);
   dropOverlay.classList.toggle("visible", dragging);
+  if (type === "enter") {
+    // Say what releasing will actually do; overwrite gets the warning style.
+    const mode = converterSelect.selectedOptions[0]?.text ?? "";
+    const overwrite = isAutoConvert() && namingSelect.value === "overwrite";
+    dropOverlayText.textContent = !isAutoConvert()
+      ? t("drop.release")
+      : t(overwrite ? "drop.releaseOverwrite" : "drop.releaseConvert", { mode });
+    dropOverlay.classList.toggle("is-warning", overwrite);
+  }
   if (type === "drop" && "paths" in event.payload) {
     addFiles(event.payload.paths);
   }
@@ -1282,6 +1356,7 @@ function applyAppMenu(): void {
     convert: () => {
       if (!convertBtn.classList.contains("hidden")) void convertPending();
     },
+    quit: () => void requestQuit(),
   })
     .then(() => {
       menuShortcuts = true;
@@ -1291,8 +1366,46 @@ function applyAppMenu(): void {
 }
 applyAppMenu();
 
+// Startup update check: a cue in the toolbar, never a modal over the user's work.
+const updateChip = $<HTMLButtonElement>("#update-chip");
+let availableVersion = "";
+function syncUpdateChip(): void {
+  updateChip.classList.toggle("hidden", !availableVersion);
+  $<HTMLSpanElement>("#update-chip-label").textContent = t("update.chip", {
+    version: availableVersion,
+  });
+}
+updateChip.addEventListener("click", () => void installPendingUpdate());
+
 void initVersion();
-initUpdater();
+initUpdater({
+  getRisk: () => ({ converting: isConverting, undoable: countUndoable(files) }),
+  onAvailable: (version) => {
+    availableVersion = version;
+    syncUpdateChip();
+  },
+});
+
+/** Quit, after confirming when that would cut a batch short or lose Undo. */
+async function requestQuit(): Promise<void> {
+  const undoable = countUndoable(files);
+  if (isConverting || undoable) {
+    const ok = await confirmDialog({
+      title: t("quit.title"),
+      body: isConverting ? t("quit.converting") : "",
+      warning: undoable ? t("quit.undoWarning", { count: String(undoable) }) : "",
+      confirmLabel: t("quit.confirm"),
+      cancelLabel: t("quit.cancel"),
+    });
+    if (!ok) return;
+  }
+  await exit(0);
+}
+// Closing the window quits the app. Always handled here so the close can be confirmed.
+void getCurrentWebviewWindow().onCloseRequested((event) => {
+  event.preventDefault();
+  void requestQuit();
+});
 void loadServiceInfo();
 render();
 
@@ -1305,6 +1418,7 @@ if (localeSelect) {
     setLocale(localeSelect.value as Locale);
     applyShortcutHints();
     applyAppMenu();
+    syncUpdateChip();
     syncModeSeg();
     // The status bar copies the converter <option> text, which translatePage() just changed.
     syncStatusMode();
