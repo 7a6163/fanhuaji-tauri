@@ -1,4 +1,5 @@
-use quick_xml::events::{BytesText, Event};
+use quick_xml::escape::resolve_html5_entity;
+use quick_xml::events::{BytesRef, BytesText, Event};
 use quick_xml::{Reader, Writer};
 use std::fs;
 use std::io::{Cursor, Read, Write};
@@ -233,28 +234,69 @@ fn scope_for(kind: ContentKind) -> TextScope {
     }
 }
 
+/// A text node as quick-xml (0.38+) reports it: `Text` events split at every
+/// entity reference (`&amp;`, `&nbsp;`, `&#x4E2D;`), each reference its own
+/// `GeneralRef` event. The run is collected so the node is converted as one piece.
+#[derive(Default)]
+struct TextRun {
+    text: String,
+    events: Vec<Event<'static>>,
+}
+
+impl TextRun {
+    fn push(&mut self, event: Event<'_>) -> Result<(), String> {
+        match &event {
+            Event::Text(t) => self.text.push_str(t),
+            Event::GeneralRef(r) => self.text.push_str(&resolve_ref(r)?),
+            _ => unreachable!("TextRun only takes Text and GeneralRef events"),
+        }
+        self.events.push(event.into_owned());
+        Ok(())
+    }
+}
+
+fn resolve_ref(r: &BytesRef) -> Result<String, String> {
+    if let Some(c) = r
+        .resolve_char_ref()
+        .map_err(|e| format!("XML_DECODE_FAILED:{e}"))?
+    {
+        return Ok(c.to_string());
+    }
+    // HTML5 names cover the XML predefined ones; chapters often use &nbsp; or &hellip;.
+    resolve_html5_entity(r)
+        .map(str::to_string)
+        .ok_or_else(|| format!("XML_DECODE_FAILED:unknown entity &{};", &**r))
+}
+
+fn is_text(event: &Event) -> bool {
+    matches!(event, Event::Text(_) | Event::GeneralRef(_))
+}
+
 /// Extract the text nodes relevant for `kind`, joining with a delimiter.
 /// Returns the concatenated text and the count of text segments.
 pub fn extract_text(kind: ContentKind, xml: &str) -> Result<(String, usize), String> {
     let mut reader = Reader::from_str(xml);
     let mut scope = scope_for(kind);
     let mut texts = Vec::new();
+    let mut run = TextRun::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Start(e)) => scope.enter(e.local_name().as_ref()),
-            Ok(Event::End(_)) => scope.leave(),
-            Ok(Event::Text(e)) if scope.active() => {
-                let text = e
-                    .unescape()
-                    .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?
-                    .into_owned();
-                if !text.trim().is_empty() {
-                    texts.push(text);
-                }
-            }
-            Ok(Event::Eof) => break,
-            Err(e) => return Err(format!("XML_PARSE_FAILED:{e}")),
+        let event = reader
+            .read_event()
+            .map_err(|e| format!("XML_PARSE_FAILED:{e}"))?;
+        if scope.active() && is_text(&event) {
+            run.push(event)?;
+            continue;
+        }
+        // Any other event ends the text node, and must be flushed before the scope changes.
+        let text = std::mem::take(&mut run).text;
+        if !text.trim().is_empty() {
+            texts.push(text);
+        }
+        match event {
+            Event::Start(e) => scope.enter(e.local_name().as_ref().as_bytes()),
+            Event::End(_) => scope.leave(),
+            Event::Eof => break,
             _ => {}
         }
     }
@@ -274,42 +316,46 @@ pub fn replace_text(kind: ContentKind, xml: &str, converted: &str) -> Result<Str
     let mut reader = Reader::from_str(xml);
     let mut scope = scope_for(kind);
     let mut writer = Writer::new(Cursor::new(Vec::new()));
+    let mut write = |e: Event| {
+        writer
+            .write_event(e)
+            .map_err(|e| format!("XML_WRITE_FAILED:{e}"))
+    };
+    let mut run = TextRun::default();
 
     loop {
-        match reader.read_event() {
-            Ok(Event::Text(e)) if scope.active() => {
-                let original = e
-                    .unescape()
-                    .map_err(|err| format!("XML_DECODE_FAILED:{err}"))?;
-                let segment = if original.trim().is_empty() {
-                    None
-                } else {
-                    nodes += 1;
-                    segments.get(nodes - 1)
-                };
-                if let Some(segment) = segment {
-                    writer
-                        .write_event(Event::Text(BytesText::new(segment)))
-                        .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
-                } else {
-                    writer
-                        .write_event(Event::Text(e.into_owned()))
-                        .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
-                }
-            }
-            Ok(Event::Eof) => break,
-            Ok(e) => {
-                match &e {
-                    Event::Start(s) => scope.enter(s.local_name().as_ref()),
-                    Event::End(_) => scope.leave(),
-                    _ => {}
-                }
-                writer
-                    .write_event(e)
-                    .map_err(|e| format!("XML_WRITE_FAILED:{e}"))?;
-            }
-            Err(e) => return Err(format!("XML_PARSE_FAILED:{e}")),
+        let event = reader
+            .read_event()
+            .map_err(|e| format!("XML_PARSE_FAILED:{e}"))?;
+        if scope.active() && is_text(&event) {
+            run.push(event)?;
+            continue;
         }
+        let done = std::mem::take(&mut run);
+        if !done.events.is_empty() {
+            let segment = if done.text.trim().is_empty() {
+                None
+            } else {
+                nodes += 1;
+                segments.get(nodes - 1)
+            };
+            match segment {
+                Some(segment) => write(Event::Text(BytesText::new(segment)))?,
+                // Whitespace-only nodes (and any surplus) are written back untouched.
+                None => {
+                    for e in done.events {
+                        write(e)?;
+                    }
+                }
+            }
+        }
+        match &event {
+            Event::Start(s) => scope.enter(s.local_name().as_ref().as_bytes()),
+            Event::End(_) => scope.leave(),
+            Event::Eof => break,
+            _ => {}
+        }
+        write(event)?;
     }
 
     if nodes != segments.len() {
@@ -826,6 +872,19 @@ mod tests {
         assert_eq!(
             result,
             "<html><body><p>第一章\u{a0}開始\u{2026}</p><p>\u{a9} 作者</p></body></html>"
+        );
+    }
+
+    #[test]
+    fn char_refs_stay_in_one_text_node() {
+        let xhtml = "<html><body><p>&#x4E2D;&#25991; 字幕</p><p>  </p></body></html>";
+        let (text, count) = extract_text(ContentKind::Xhtml, xhtml).unwrap();
+        assert_eq!((text.as_str(), count), ("中文 字幕", 1));
+
+        let result = replace_text(ContentKind::Xhtml, xhtml, "中文 字幕 & 歌詞").unwrap();
+        assert_eq!(
+            result,
+            "<html><body><p>中文 字幕 &amp; 歌詞</p><p>  </p></body></html>"
         );
     }
 
