@@ -205,7 +205,7 @@ function render() {
       </button>
       <div class="fc-status">${
         f.status === "success" && f.backupPath
-          ? `<button type="button" class="fc-undo" data-undo="${escHtml(f.id)}" title="${escHtml(t("file.undoTitle"))}"><i aria-hidden="true" class="ti ti-arrow-back-up"></i>${escHtml(t("file.undo"))}</button>`
+          ? `<button type="button" class="fc-undo" data-undo="${escHtml(f.id)}" title="${escHtml(t("file.undoTitle"))}" aria-label="${escHtml(t("file.undo"))}"><i aria-hidden="true" class="ti ti-arrow-back-up"></i></button>`
           : ""
       }${
         f.status === "success" && f.outputPath
@@ -1080,6 +1080,8 @@ if (localeSelect) {
   localeSelect.addEventListener("change", () => {
     setLocale(localeSelect.value as Locale);
     applyShortcutHints();
+    // The status bar copies the converter <option> text, which translatePage() just changed.
+    syncStatusMode();
     render();
     renderModuleList();
     syncOutPill();

@@ -468,23 +468,9 @@ html[lang="en"] .brand-sub { display: none; }
   white-space: nowrap;
 }
 .fc-status { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
-.fc-undo {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.fc-undo:hover { border-color: var(--accent); color: var(--accent); }
 .status-action:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
-.fc-undo:disabled { opacity: 0.5; cursor: default; }
+/* Card icon actions; names live in aria-label and the tooltip. */
+.fc-undo,
 .fc-reveal {
   width: 24px;
   height: 24px;
@@ -497,7 +483,12 @@ html[lang="en"] .brand-sub { display: none; }
   font-size: 15px;
   cursor: pointer;
 }
+.fc-undo:hover,
 .fc-reveal:hover { background: var(--hover-strong); color: var(--text); }
+/* Undo is the way back from an overwrite, so it carries the accent. */
+.fc-undo,
+.fc-undo:hover { color: var(--accent); }
+.fc-undo:disabled { opacity: 0.5; cursor: default; }
 
 /* Right: live preview */
 .preview-col {
@@ -579,6 +570,7 @@ html[lang="en"] .brand-sub { display: none; }
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 4px;
+  text-align: center;
 }
 
 .file-items {
