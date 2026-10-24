@@ -62,6 +62,7 @@
             <button type="button" id="out-pill-btn" class="out-pill-btn" aria-haspopup="dialog" aria-expanded="false">
               <i aria-hidden="true" class="ti ti-folder"></i>
               <span id="out-pill-label">自訂後綴</span>
+              <i aria-hidden="true" id="out-pill-auto" class="ti ti-bolt"></i>
               <i aria-hidden="true" class="ti ti-chevron-down out-pill-caret"></i>
             </button>
             <div id="out-pop" class="out-pop hidden" role="dialog" aria-label="輸出方式" data-i18n-aria-label="naming.title">
@@ -109,6 +110,11 @@
                 <i aria-hidden="true" class="ti ti-check oo-check"></i>
               </button>
               </div>
+              <div class="out-pop-group" data-i18n="naming.when">轉換時機</div>
+              <label class="setting-toggle oo-toggle">
+                <input type="checkbox" id="auto-convert" checked />
+                <span data-i18n="settings.behavior.autoConvert">拖入檔案後自動開始轉換</span>
+              </label>
             </div>
           </div>
           <!-- Settings state: the toolbar popovers drive these; convert params and persistence read them. -->
@@ -143,6 +149,10 @@
               <option value="overwrite" data-i18n="settings.save.naming.overwrite">覆蓋原檔</option>
             </select>
           </div>
+          <button type="button" id="update-chip" class="update-chip hidden">
+            <i aria-hidden="true" class="ti ti-download"></i>
+            <span id="update-chip-label"></span>
+          </button>
           <button type="button" id="btn-settings" class="icon-btn" data-i18n-title="header.settings" title="設定" aria-label="設定" data-i18n-aria-label="header.settings">
             <i aria-hidden="true" class="ti ti-settings"></i>
           </button>
@@ -187,6 +197,10 @@
                 <div id="preview-stats" class="preview-stats"></div>
               </div>
             </div>
+            <div id="preview-stale" class="preview-stale hidden" role="status">
+              <span data-i18n="preview.stale">設定已變更，這裡顯示的仍是已存檔的結果。</span>
+              <button type="button" id="btn-reconvert" class="pane-act" data-i18n="preview.reconvert">以目前設定重新轉換</button>
+            </div>
             <div id="preview-body" class="preview-body"></div>
           </div>
         </section>
@@ -220,21 +234,22 @@
       </footer>
 
       <div id="sr-status" class="sr-only" aria-live="polite"></div>
-      <dialog id="update-dialog" class="app-dialog" aria-labelledby="update-dialog-title">
+      <dialog id="app-dialog" class="app-dialog" aria-labelledby="app-dialog-title">
         <form method="dialog">
-          <h2 id="update-dialog-title" class="app-dialog-title"></h2>
-          <p class="app-dialog-body" data-i18n="update.prompt">要現在下載並安裝嗎？完成後 App 會重新啟動。</p>
-          <pre id="update-dialog-notes" class="app-dialog-notes" aria-label="更新內容" data-i18n-aria-label="update.notes" hidden></pre>
+          <h2 id="app-dialog-title" class="app-dialog-title"></h2>
+          <p id="app-dialog-body" class="app-dialog-body"></p>
+          <p id="app-dialog-warning" class="app-dialog-warning" hidden></p>
+          <pre id="app-dialog-notes" class="app-dialog-notes" aria-label="更新內容" data-i18n-aria-label="update.notes" hidden></pre>
           <div class="app-dialog-actions">
-            <button type="submit" value="later" class="action-btn" data-i18n="update.later">稍後</button>
-            <button type="submit" value="install" class="action-btn primary" autofocus data-i18n="update.install">更新並重新啟動</button>
+            <button type="submit" id="app-dialog-cancel" value="cancel" class="action-btn"></button>
+            <button type="submit" id="app-dialog-confirm" value="confirm" class="action-btn primary"></button>
           </div>
         </form>
       </dialog>
       <div id="drop-overlay" class="drop-overlay" aria-hidden="true">
         <div class="drop-overlay-frame">
           <i class="ti ti-cloud-upload"></i>
-          <span data-i18n="drop.release">放開以加入檔案</span>
+          <span id="drop-overlay-text">放開以加入檔案</span>
         </div>
       </div>
 
@@ -305,13 +320,6 @@
                 <i aria-hidden="true" class="ti ti-cloud-download"></i><span data-i18n="settings.update.check">檢查更新</span>
               </button>
               <span id="update-status" class="update-status"></span>
-            </section>
-            <section class="setting-section">
-              <h3><i aria-hidden="true" class="ti ti-robot"></i> <span data-i18n="settings.behavior.title">行為</span></h3>
-              <label class="setting-toggle">
-                <input type="checkbox" id="auto-convert" checked />
-                <span data-i18n="settings.behavior.autoConvert">拖入檔案後自動開始轉換</span>
-              </label>
             </section>
             <section class="setting-section">
               <h3><i aria-hidden="true" class="ti ti-info-circle"></i> <span data-i18n="settings.about.title">關於</span></h3>

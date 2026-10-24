@@ -5,6 +5,8 @@ export interface MenuActions {
   openFiles: () => void;
   openSettings: () => void;
   convert: () => void;
+  /** Quit through the app, so it can confirm when Undo or a batch would be lost. */
+  quit: () => void;
 }
 
 /**
@@ -29,7 +31,7 @@ export async function setAppMenu(actions: MenuActions): Promise<void> {
           { item: "HideOthers", text: t("menu.hideOthers") },
           { item: "ShowAll", text: t("menu.showAll") },
           { item: "Separator" },
-          { item: "Quit", text: t("menu.quit") },
+          { text: t("menu.quit"), accelerator: "CmdOrCtrl+Q", action: actions.quit },
         ],
       },
       {

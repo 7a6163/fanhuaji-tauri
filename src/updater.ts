@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { check } from "@tauri-apps/plugin-updater";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { confirmDialog } from "./dialog";
 import { t } from "./i18n/i18n";
 
 function setUpdateStatus(msg: string) {
@@ -16,29 +17,57 @@ async function isPortableBuild(): Promise<boolean> {
   }
 }
 
-/**
- * Ask whether to install an update, in the app's own dialog. Falls back to the native
- * confirm when the page has no dialog (e.g. tests) or the webview lacks showModal.
- */
-export function confirmUpdate(version: string, notes?: string): Promise<boolean> {
-  const dialog = document.getElementById("update-dialog") as HTMLDialogElement | null;
-  if (!dialog || typeof dialog.showModal !== "function") {
-    return Promise.resolve(window.confirm(t("update.confirm", { version })));
-  }
-  // Both live inside the dialog's own markup in index.html.
-  const title = dialog.querySelector("#update-dialog-title") as HTMLElement;
-  const notesEl = dialog.querySelector("#update-dialog-notes") as HTMLElement;
-  title.textContent = t("update.found", { version });
-  notesEl.textContent = (notes ?? "").trim();
-  notesEl.hidden = !notesEl.textContent;
-  return new Promise((resolve) => {
-    // The form's method="dialog" buttons set returnValue; Escape leaves it empty.
-    dialog.returnValue = "";
-    dialog.addEventListener("close", () => resolve(dialog.returnValue === "install"), {
-      once: true,
-    });
-    dialog.showModal();
+/** What an update restart would interrupt or throw away, supplied by the app. */
+export interface UpdateRisk {
+  converting: boolean;
+  undoable: number;
+}
+
+interface UpdaterOptions {
+  getRisk?: () => UpdateRisk;
+  /** Called when the startup check finds an update; the app shows its own cue. */
+  onAvailable?: (version: string) => void;
+}
+
+let options: UpdaterOptions = {};
+let pendingUpdate: Update | null = null;
+
+/** Ask, then download, install and relaunch. A running batch blocks the restart. */
+async function promptInstall(update: Update): Promise<void> {
+  const risk = options.getRisk?.() ?? { converting: false, undoable: 0 };
+  const warning = risk.converting
+    ? t("update.busy")
+    : risk.undoable
+      ? t("update.undoWarning", { count: String(risk.undoable) })
+      : "";
+  const confirmed = await confirmDialog({
+    title: t("update.found", { version: update.version }),
+    body: t("update.prompt"),
+    warning,
+    notes: update.body,
+    confirmLabel: t("update.install"),
+    cancelLabel: t("update.later"),
+    blocked: risk.converting,
   });
+  if (!confirmed) return;
+
+  setUpdateStatus(t("update.downloading"));
+  await update.downloadAndInstall((event) => {
+    if (event.event === "Finished") {
+      setUpdateStatus(t("update.restarting"));
+    }
+  });
+  await relaunch();
+}
+
+/** Open the install prompt for the update the startup check found. */
+export async function installPendingUpdate(): Promise<void> {
+  if (!pendingUpdate) return;
+  try {
+    await promptInstall(pendingUpdate);
+  } catch (err) {
+    setUpdateStatus(t("update.failed", { error: String(err) }));
+  }
 }
 
 export async function checkForUpdates(silent = false): Promise<void> {
@@ -59,18 +88,13 @@ export async function checkForUpdates(silent = false): Promise<void> {
     }
 
     setUpdateStatus(t("update.found", { version: update.version }));
-    const confirmed = await confirmUpdate(update.version, update.body);
-    if (!confirmed) return;
-
-    setUpdateStatus(t("update.downloading"));
-
-    await update.downloadAndInstall((event) => {
-      if (event.event === "Finished") {
-        setUpdateStatus(t("update.restarting"));
-      }
-    });
-
-    await relaunch();
+    // The startup check never opens a modal over the user's work; it leaves a cue.
+    if (silent) {
+      pendingUpdate = update;
+      options.onAvailable?.(update.version);
+      return;
+    }
+    await promptInstall(update);
   } catch (err) {
     if (!silent) {
       setUpdateStatus(t("update.failed", { error: String(err) }));
@@ -79,7 +103,8 @@ export async function checkForUpdates(silent = false): Promise<void> {
   }
 }
 
-export function initUpdater() {
+export function initUpdater(opts: UpdaterOptions = {}) {
+  options = opts;
   const btn = document.getElementById("btn-check-update");
   btn?.addEventListener("click", () => checkForUpdates(false));
 
