@@ -2,10 +2,10 @@ use crate::build_service_info;
 use crate::epub;
 use crate::{
     API_BASE, ApiConvertData, ApiResponse, Backups, ConvertFileResult, ConvertOptions,
-    ConvertParams, EpubProgress, HttpClient, ServiceInfo, build_api_params, build_output_name,
-    check_file_size, chunk_budget, decode_text, encode_text, epub_warnings, is_fatal_api_error,
-    resolve_output_dir, split_text, trim_partial_utf8, truncate_chars, validate_api_response,
-    write_atomic,
+    ConvertParams, EpubProgress, HttpClient, PREVIEW_CHAR_LIMIT, PreviewResult, ServiceInfo,
+    build_api_params, build_output_name, build_preview, check_file_size, chunk_budget, decode_text,
+    encode_text, epub_warnings, is_fatal_api_error, resolve_output_dir, split_text,
+    trim_partial_utf8, truncate_chars, validate_api_response, write_atomic,
 };
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -249,23 +249,14 @@ pub async fn convert_file(
         output_path: output_path.to_string_lossy().into_owned(),
         warnings: None,
         backup_path,
+        // The UI shows this instead of asking the API for a separate preview.
+        preview: Some(build_preview(&content, &converted_text)),
     })
 }
-
-/// Cap on characters returned to the UI for a preview, to keep payloads small.
-const PREVIEW_CHAR_LIMIT: usize = 8000;
 
 /// Bytes read for a preview: a char is at most 4 bytes in any supported
 /// encoding, so this always holds more than `PREVIEW_CHAR_LIMIT` chars.
 const PREVIEW_READ_BYTES: u64 = 64 * 1024;
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PreviewResult {
-    original: String,
-    converted: String,
-    truncated: bool,
-}
 
 /// Convert a file via the API and return the original + converted text (capped)
 /// for an on-screen diff preview. Unlike `convert_file`, nothing is written to disk.
@@ -292,18 +283,11 @@ pub async fn preview_convert(
 
     // Only the preview window is sent to the API — a large file would be
     // rejected for body size and the extra text would just be discarded here.
-    let (original, input_truncated) = truncate_chars(&content, PREVIEW_CHAR_LIMIT);
+    let (original, _) = truncate_chars(&content, PREVIEW_CHAR_LIMIT);
 
     let data = convert_chunk(&client.0, original, params.options()).await?;
 
-    // Bopomofo/pinyin output can far exceed its input, so check both sides.
-    let (converted, output_truncated) = truncate_chars(&data.text, PREVIEW_CHAR_LIMIT);
-
-    Ok(PreviewResult {
-        original: original.to_string(),
-        converted: converted.to_string(),
-        truncated: input_truncated || output_truncated,
-    })
+    Ok(build_preview(&content, &data.text))
 }
 
 /// Convert one extracted EPUB content file in place. Returns `Ok(false)` when
@@ -404,6 +388,7 @@ pub async fn convert_epub(
         output_path: output_path.to_string_lossy().into_owned(),
         warnings,
         backup_path,
+        preview: None,
     })
 }
 

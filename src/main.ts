@@ -172,6 +172,10 @@ function render() {
   statusBar.classList.toggle("hidden", isEmpty);
   queueMeta.textContent = isEmpty ? "" : t("queue.count", { count: String(files.length) });
 
+  for (const id of previewCache.keys()) {
+    if (!files.some((f) => f.id === id)) previewCache.delete(id);
+  }
+
   // Drop the preview back to its empty state if the selected file is gone.
   if (selectedId && !files.some((f) => f.id === selectedId)) showEmptyPreview();
 
@@ -415,6 +419,22 @@ function readConvertParams(file: FileEntry) {
   };
 }
 
+// Previews that came back with a conversion, keyed by file id, with the converter
+// that produced them. Cleared when a setting that changes the output changes.
+const previewCache = new Map<string, { res: PreviewResult; converter: string }>();
+
+function showPreviewResult(res: PreviewResult, converter: string): void {
+  const diff = renderDiff(res.original, res.converted, converter);
+  const chars = [...res.original].length;
+  previewStats.textContent = `${t("preview.stats", { chars: String(chars), changed: String(diff.changedLines) })}${res.truncated ? ` · ${t("preview.truncated")}` : ""}`;
+  previewBody.innerHTML =
+    diff.html || `<div class="preview-loading">${escHtml(t("preview.empty"))}</div>`;
+}
+
+/**
+ * Show the diff for a file. A conversion returns its own preview, so a file that is
+ * converting, or about to be, waits for that instead of costing a second API call.
+ */
 async function previewFile(file: FileEntry): Promise<void> {
   const isCurrent = previewGuard.begin();
   const ext = fileExt(file.inputName);
@@ -439,8 +459,18 @@ async function previewFile(file: FileEntry): Promise<void> {
     return;
   }
 
+  const cached = previewCache.get(file.id);
+  if (cached) {
+    showPreviewResult(cached.res, cached.converter);
+    return;
+  }
+
   previewStats.textContent = t("preview.converting");
   previewBody.innerHTML = `<div class="preview-loading"><i aria-hidden="true" class="ti ti-loader-2"></i> ${escHtml(t("preview.loading"))}</div>`;
+
+  const convertingSoon =
+    file.status === "converting" || (file.status === "pending" && isAutoConvert() && !batchStopped);
+  if (convertingSoon) return;
 
   try {
     const params = readConvertParams(file);
@@ -448,11 +478,7 @@ async function previewFile(file: FileEntry): Promise<void> {
     if (file.backupPath) params.inputPath = file.backupPath;
     const res = await invoke<PreviewResult>("preview_convert", { params });
     if (!isCurrent()) return;
-    const diff = renderDiff(res.original, res.converted, params.converter);
-    const chars = [...res.original].length;
-    previewStats.textContent = `${t("preview.stats", { chars: String(chars), changed: String(diff.changedLines) })}${res.truncated ? ` · ${t("preview.truncated")}` : ""}`;
-    previewBody.innerHTML =
-      diff.html || `<div class="preview-loading">${escHtml(t("preview.empty"))}</div>`;
+    showPreviewResult(res, params.converter);
   } catch (err) {
     if (!isCurrent()) return;
     previewStats.textContent = "";
@@ -554,7 +580,11 @@ async function convertPending() {
           outputPath: string;
           warnings?: string;
           backupPath?: string;
+          preview?: PreviewResult;
         } = await invoke(isEpubFile(file.inputName) ? "convert_epub" : "convert_file", { params });
+        if (result.preview) {
+          previewCache.set(file.id, { res: result.preview, converter: params.converter });
+        }
 
         files = files.map((f) =>
           f.id === file.id
@@ -583,6 +613,11 @@ async function convertPending() {
       completedCount++;
       showProgress((completedCount / totalPending) * 100);
       render();
+      // The selected file may be waiting on this conversion for its preview.
+      if (selectedId === file.id) {
+        const done = files.find((f) => f.id === file.id);
+        if (done) void previewFile(done);
+      }
     }
   } finally {
     isConverting = false;
@@ -783,6 +818,8 @@ function syncStatusMode(): void {
 }
 /** Re-run the preview for the selected file after a setting that changes the output. */
 function refreshPreview(): void {
+  // Every cached preview was made with the old settings.
+  previewCache.clear();
   const f = selectedId ? files.find((x) => x.id === selectedId) : undefined;
   if (f) void previewFile(f);
 }

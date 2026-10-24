@@ -69,6 +69,32 @@ pub(crate) struct ConvertFileResult {
     /// Set when overwrite mode replaced the input: a copy of the original to preview or restore.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_path: Option<String>,
+    /// Start of the original and converted text, so the UI needs no separate preview call.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<PreviewResult>,
+}
+
+/// Cap on characters returned to the UI for a preview, to keep payloads small.
+pub(crate) const PREVIEW_CHAR_LIMIT: usize = 8000;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PreviewResult {
+    pub original: String,
+    pub converted: String,
+    pub truncated: bool,
+}
+
+/// The preview window of a conversion. Both sides are capped: Bopomofo/pinyin
+/// output can far exceed its input.
+pub(crate) fn build_preview(original: &str, converted: &str) -> PreviewResult {
+    let (orig, input_truncated) = truncate_chars(original, PREVIEW_CHAR_LIMIT);
+    let (conv, output_truncated) = truncate_chars(converted, PREVIEW_CHAR_LIMIT);
+    PreviewResult {
+        original: orig.to_string(),
+        converted: conv.to_string(),
+        truncated: input_truncated || output_truncated,
+    }
 }
 
 /// Arguments shared by `convert_file`, `convert_epub` and `preview_convert`.
@@ -727,6 +753,20 @@ mod tests {
     // --- write_atomic ---
 
     #[test]
+    fn build_preview_caps_both_sides() {
+        let short = build_preview("简体", "簡體");
+        assert_eq!(short.original, "简体");
+        assert_eq!(short.converted, "簡體");
+        assert!(!short.truncated);
+
+        let long = "字".repeat(PREVIEW_CHAR_LIMIT + 5);
+        let p = build_preview("短", &long);
+        assert_eq!(p.converted.chars().count(), PREVIEW_CHAR_LIMIT);
+        assert!(p.truncated);
+        assert!(build_preview(&long, "短").truncated);
+    }
+
+    #[test]
     fn backups_restore_original_and_forget_it() {
         let dir = tempfile::tempdir().unwrap();
         let backups = Backups::new(dir.path().join("backups")).unwrap();
@@ -1176,6 +1216,7 @@ mod tests {
             output_path: "/tmp/test.Taiwan.txt".to_string(),
             warnings: None,
             backup_path: None,
+            preview: None,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["outputName"], "test.Taiwan.txt");
@@ -1349,6 +1390,7 @@ mod tests {
             output_path: "/tmp/t.txt".to_string(),
             warnings: None,
             backup_path: None,
+            preview: None,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert!(json.get("warnings").is_none());
@@ -1361,6 +1403,7 @@ mod tests {
             output_path: "/tmp/t.txt".to_string(),
             warnings: Some("warn".to_string()),
             backup_path: None,
+            preview: None,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["warnings"], "warn");
