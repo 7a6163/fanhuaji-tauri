@@ -2,7 +2,7 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
-## [Unreleased]
+## [2.5.0] - 2026-10-24
 
 ### Added
 
