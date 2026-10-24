@@ -16,6 +16,31 @@ async function isPortableBuild(): Promise<boolean> {
   }
 }
 
+/**
+ * Ask whether to install an update, in the app's own dialog. Falls back to the native
+ * confirm when the page has no dialog (e.g. tests) or the webview lacks showModal.
+ */
+export function confirmUpdate(version: string, notes?: string): Promise<boolean> {
+  const dialog = document.getElementById("update-dialog") as HTMLDialogElement | null;
+  if (!dialog || typeof dialog.showModal !== "function") {
+    return Promise.resolve(window.confirm(t("update.confirm", { version })));
+  }
+  // Both live inside the dialog's own markup in index.html.
+  const title = dialog.querySelector("#update-dialog-title") as HTMLElement;
+  const notesEl = dialog.querySelector("#update-dialog-notes") as HTMLElement;
+  title.textContent = t("update.found", { version });
+  notesEl.textContent = (notes ?? "").trim();
+  notesEl.hidden = !notesEl.textContent;
+  return new Promise((resolve) => {
+    // The form's method="dialog" buttons set returnValue; Escape leaves it empty.
+    dialog.returnValue = "";
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "install"), {
+      once: true,
+    });
+    dialog.showModal();
+  });
+}
+
 export async function checkForUpdates(silent = false): Promise<void> {
   if (!silent) setUpdateStatus(t("update.checking"));
 
@@ -34,7 +59,7 @@ export async function checkForUpdates(silent = false): Promise<void> {
     }
 
     setUpdateStatus(t("update.found", { version: update.version }));
-    const confirmed = window.confirm(t("update.confirm", { version: update.version }));
+    const confirmed = await confirmUpdate(update.version, update.body);
     if (!confirmed) return;
 
     setUpdateStatus(t("update.downloading"));
