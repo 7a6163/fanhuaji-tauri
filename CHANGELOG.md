@@ -2,6 +2,21 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.5.2] - 2026-10-25
+
+### Changed
+
+- Tauri 升級到 2.12，自動更新、對話框等外掛同步更新到最新的 2.x（#47）
+
+### Fixed
+
+- 標題列 Logo 的「繁」往下偏約 1px，改為置中（#50）
+
+### Security
+
+- 更新有已知漏洞的相依套件，包括連線加密（rustls、rustls-webpki）與網路請求（quinn-proto）相關套件（#47）
+- EPUB 解析用的 quick-xml 升級到 0.42，修正 RUSTSEC-2026-0194、RUSTSEC-2026-0195（#48）
+
 ## [2.5.1] - 2026-10-25
 
 ### Changed
