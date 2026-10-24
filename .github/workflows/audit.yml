@@ -1,0 +1,39 @@
+name: Dependency audit
+
+# Runs on dependency changes and weekly, since new advisories land without any code change.
+on:
+  push:
+    branches: [main]
+    paths: ["package.json", "package-lock.json", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "src-tauri/.cargo/audit.toml", ".github/workflows/audit.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["package.json", "package-lock.json", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "src-tauri/.cargo/audit.toml", ".github/workflows/audit.yml"]
+  schedule:
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+      - run: npm audit
+
+  cargo:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v5
+      - uses: taiki-e/install-action@cargo-audit
+      # Ignored advisories and their reasons live in src-tauri/.cargo/audit.toml.
+      - run: cargo audit
