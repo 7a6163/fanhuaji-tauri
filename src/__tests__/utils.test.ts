@@ -309,7 +309,7 @@ describe("isSafeUrl", () => {
   });
 
   it("allows github repo", () => {
-    expect(isSafeUrl("https://github.com/7a6163/fanhuaji-tauri")).toBe(true);
+    expect(isSafeUrl("https://github.com/fanhuaji-desktop/fanhuaji-tauri")).toBe(true);
   });
 
   it("rejects http protocol", () => {
