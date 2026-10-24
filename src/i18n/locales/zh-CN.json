@@ -3,6 +3,7 @@
   "header.settings": "设置",
 
   "drop.title": "拖放文件到此处",
+  "drop.release": "松开以添加文件",
   "drop.shortcut": "或按 {key} 选择文件",
   "drop.subtitle": "或 点击打开文件",
   "drop.formats": "支持 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB",
@@ -15,6 +16,7 @@
   "status.error": "错误:",
   "status.convert": "开始转换",
   "status.clear": "清除列表",
+  "status.confirmClear": "再按一次确认（{count} 个无法恢复）",
   "status.clearDone": "清除已完成",
   "status.stop": "停止",
   "status.stopTitle": "当前文件完成后停止",
@@ -106,6 +108,7 @@
   "file.restored": "已恢复原文件",
   "file.undo": "恢复",
   "file.remove": "从列表移除",
+  "file.removeConfirm": "再按一次移除，原文件将无法恢复",
   "file.undoTitle": "把原文件放回原处（本次运行期间有效）",
   "file.convertDoneWithWarnings": "转换完成（{warnings}）",
   "file.converting": "转换中…",

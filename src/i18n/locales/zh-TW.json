@@ -3,6 +3,7 @@
   "header.settings": "設定",
 
   "drop.title": "拖放檔案到此處",
+  "drop.release": "放開以加入檔案",
   "drop.shortcut": "或按 {key} 選擇檔案",
   "drop.subtitle": "或 點擊開啟檔案",
   "drop.formats": "支援 TXT、SRT、ASS、LRC、VTT、CSV、JSON、XML、HTML、MD、EPUB",
@@ -15,6 +16,7 @@
   "status.error": "錯誤:",
   "status.convert": "開始轉換",
   "status.clear": "清除列表",
+  "status.confirmClear": "再按一次確認（{count} 個無法復原）",
   "status.clearDone": "清除已完成",
   "status.stop": "停止",
   "status.stopTitle": "目前的檔案完成後停止",
@@ -106,6 +108,7 @@
   "file.restored": "已復原原檔",
   "file.undo": "復原",
   "file.remove": "從列表移除",
+  "file.removeConfirm": "再按一次移除，原檔將無法復原",
   "file.undoTitle": "把原檔放回原處（本次執行期間有效）",
   "file.convertDoneWithWarnings": "轉換完成（{warnings}）",
   "file.converting": "轉換中…",
