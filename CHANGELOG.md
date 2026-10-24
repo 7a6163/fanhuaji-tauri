@@ -2,6 +2,12 @@
 
 本檔案記錄繁化姬 Tauri 版的所有重要變更。格式基於 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased]
+
+### Fixed
+
+- 切換介面語言後，已開啟的預覽標題（例如「已存檔 · 台灣化 · 182 字 · 8 行有變更」）仍停在舊語言
+
 ## [2.5.0] - 2026-10-24
 
 ### Added

@@ -1426,6 +1426,16 @@ if (localeSelect) {
     renderModuleList();
     syncOutPill();
     void initVersion();
+    // The open preview's header and messages were built with the old locale; rebuild them
+    // only when that needs no API call (saved result, error, or EPUB notice).
+    const shown = files.find((f) => f.id === selectedId);
+    if (
+      shown &&
+      !previewPane.classList.contains("hidden") &&
+      (shown.status === "error" || isEpubFile(shown.inputName) || previewCache.has(shown.id))
+    ) {
+      void previewFile(shown);
+    }
   });
 }
 
