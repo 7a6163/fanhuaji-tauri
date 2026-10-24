@@ -11,6 +11,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getLocale, initI18n, type Locale, setLocale, t, translateError } from "./i18n/i18n";
+import { setAppMenu } from "./menu";
 import { initTheme } from "./theme";
 import { initUpdater } from "./updater";
 import {
@@ -927,7 +928,11 @@ document.addEventListener("keydown", (e) => {
 });
 
 // Shortcuts: Cmd/Ctrl+O add files, Cmd/Ctrl+, settings, Cmd/Ctrl+Enter convert.
+// Once the macOS menu bar is set it carries them, so this steps aside to avoid
+// running a shortcut twice.
+let menuShortcuts = false;
 document.addEventListener("keydown", (e) => {
+  if (menuShortcuts) return;
   if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
   if (e.key === "o") {
     e.preventDefault();
@@ -1269,6 +1274,23 @@ function applyShortcutHints(): void {
 }
 applyShortcutHints();
 
+function applyAppMenu(): void {
+  if (!IS_MAC) return;
+  setAppMenu({
+    openFiles: () => void openFiles(),
+    openSettings,
+    convert: () => {
+      if (!convertBtn.classList.contains("hidden")) void convertPending();
+    },
+  })
+    .then(() => {
+      menuShortcuts = true;
+    })
+    // Without the menu the in-page shortcuts keep working.
+    .catch(() => {});
+}
+applyAppMenu();
+
 void initVersion();
 initUpdater();
 void loadServiceInfo();
@@ -1282,6 +1304,7 @@ if (localeSelect) {
   localeSelect.addEventListener("change", () => {
     setLocale(localeSelect.value as Locale);
     applyShortcutHints();
+    applyAppMenu();
     syncModeSeg();
     // The status bar copies the converter <option> text, which translatePage() just changed.
     syncStatusMode();

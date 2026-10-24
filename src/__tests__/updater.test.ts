@@ -15,7 +15,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import { check, type Update } from "@tauri-apps/plugin-updater";
-import { checkForUpdates, initUpdater } from "../updater";
+import { checkForUpdates, confirmUpdate, initUpdater } from "../updater";
 
 const mockCheck = vi.mocked(check);
 const mockInvoke = vi.mocked(invoke);
@@ -220,6 +220,44 @@ describe("updater", () => {
       document.body.innerHTML = '<button id="btn-check-update"></button>';
       mockCheck.mockResolvedValue(null);
       await expect(checkForUpdates(false)).resolves.not.toThrow();
+    });
+  });
+
+  describe("confirmUpdate", () => {
+    // jsdom has no showModal; stand in for the user picking a button.
+    function mountDialog(answer: string) {
+      document.body.innerHTML += `
+        <dialog id="update-dialog">
+          <h2 id="update-dialog-title"></h2>
+          <pre id="update-dialog-notes" hidden></pre>
+        </dialog>`;
+      const dialog = document.getElementById("update-dialog") as HTMLDialogElement;
+      dialog.showModal = vi.fn(() => {
+        dialog.returnValue = answer;
+        dialog.dispatchEvent(new Event("close"));
+      });
+      return dialog;
+    }
+
+    it("resolves true when Install is chosen and shows the notes", async () => {
+      const dialog = mountDialog("install");
+      await expect(confirmUpdate("2.5.0", "  Faster previews  ")).resolves.toBe(true);
+      expect(dialog.querySelector("#update-dialog-title")?.textContent).toContain("2.5.0");
+      const notes = dialog.querySelector<HTMLElement>("#update-dialog-notes");
+      expect(notes?.textContent).toBe("Faster previews");
+      expect(notes?.hidden).toBe(false);
+    });
+
+    it("resolves false on Later or Escape and hides empty notes", async () => {
+      const dialog = mountDialog("");
+      await expect(confirmUpdate("2.5.0")).resolves.toBe(false);
+      expect(dialog.querySelector<HTMLElement>("#update-dialog-notes")?.hidden).toBe(true);
+    });
+
+    it("falls back to window.confirm without the dialog", async () => {
+      const spy = vi.spyOn(window, "confirm").mockReturnValue(true);
+      await expect(confirmUpdate("2.5.0")).resolves.toBe(true);
+      expect(spy).toHaveBeenCalled();
     });
   });
 });

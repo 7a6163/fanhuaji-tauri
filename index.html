@@ -220,6 +220,17 @@
       </footer>
 
       <div id="sr-status" class="sr-only" aria-live="polite"></div>
+      <dialog id="update-dialog" class="app-dialog" aria-labelledby="update-dialog-title">
+        <form method="dialog">
+          <h2 id="update-dialog-title" class="app-dialog-title"></h2>
+          <p class="app-dialog-body" data-i18n="update.prompt">要現在下載並安裝嗎？完成後 App 會重新啟動。</p>
+          <pre id="update-dialog-notes" class="app-dialog-notes" aria-label="更新內容" data-i18n-aria-label="update.notes" hidden></pre>
+          <div class="app-dialog-actions">
+            <button type="submit" value="later" class="action-btn" data-i18n="update.later">稍後</button>
+            <button type="submit" value="install" class="action-btn primary" autofocus data-i18n="update.install">更新並重新啟動</button>
+          </div>
+        </form>
+      </dialog>
       <div id="drop-overlay" class="drop-overlay" aria-hidden="true">
         <div class="drop-overlay-frame">
           <i class="ti ti-cloud-upload"></i>
