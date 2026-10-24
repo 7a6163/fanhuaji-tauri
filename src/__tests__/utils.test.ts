@@ -124,6 +124,20 @@ describe("fileMessage", () => {
     expect(fileMessage(f)).toBe("轉換完成（部分章節失敗（3/40））");
   });
 
+  it("names the output file for a success", () => {
+    const f = makeFile({ status: "success", outputName: "test.Taiwan.txt" });
+    expect(fileMessage(f)).toBe(t("file.savedAs", { name: "test.Taiwan.txt" }));
+  });
+
+  it("says the original was overwritten when a backup exists", () => {
+    const f = makeFile({ status: "success", outputName: "test.txt", backupPath: "/b/x" });
+    expect(fileMessage(f)).toBe(t("file.overwritten"));
+  });
+
+  it("shows restored after an undo", () => {
+    expect(fileMessage(makeFile({ status: "restored" }))).toBe(t("file.restored"));
+  });
+
   it("escapes the message", () => {
     const f = makeFile({ status: "error", message: "<b>bad</b>" });
     expect(fileMessage(f)).toBe("&lt;b&gt;bad&lt;/b&gt;");
@@ -235,12 +249,14 @@ describe("countByStatus", () => {
       makeFile({ status: "pending" }),
       makeFile({ status: "converting" }),
       makeFile({ status: "success" }),
+      makeFile({ status: "success", message: "部分章節失敗" }),
       makeFile({ status: "error" }),
     ];
     expect(countByStatus(files)).toEqual({
-      total: 5,
+      total: 6,
       pending: 2,
       success: 1,
+      warning: 1,
       error: 1,
     });
   });
@@ -250,6 +266,7 @@ describe("countByStatus", () => {
       total: 0,
       pending: 0,
       success: 0,
+      warning: 0,
       error: 0,
     });
   });

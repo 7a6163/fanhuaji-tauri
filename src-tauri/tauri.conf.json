@@ -14,6 +14,8 @@
       {
         "title": "繁化姬",
         "width": 760,
+        "minWidth": 640,
+        "minHeight": 480,
         "height": 680,
         "resizable": true,
         "center": true

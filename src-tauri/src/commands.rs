@@ -1,14 +1,15 @@
 use crate::build_service_info;
 use crate::epub;
 use crate::{
-    API_BASE, ApiConvertData, ApiResponse, ConvertFileResult, ConvertOptions, ConvertParams,
-    EpubProgress, HttpClient, ServiceInfo, build_api_params, build_output_name, check_file_size,
-    chunk_budget, decode_text, encode_text, epub_warnings, is_fatal_api_error, resolve_output_dir,
-    split_text, trim_partial_utf8, truncate_chars, validate_api_response, write_atomic,
+    API_BASE, ApiConvertData, ApiResponse, Backups, ConvertFileResult, ConvertOptions,
+    ConvertParams, EpubProgress, HttpClient, ServiceInfo, build_api_params, build_output_name,
+    check_file_size, chunk_budget, decode_text, encode_text, epub_warnings, is_fatal_api_error,
+    resolve_output_dir, split_text, trim_partial_utf8, truncate_chars, validate_api_response,
+    write_atomic,
 };
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
@@ -187,10 +188,25 @@ async fn resolve_output(
     Ok((canonical_dir.join(&output_name), output_name))
 }
 
+/// Overwrite mode replaces the input: keep a copy first so the UI can undo.
+fn backup_if_overwrite(
+    backups: &Backups,
+    file_id: &str,
+    input: &Path,
+    output: &Path,
+) -> Result<Option<String>, String> {
+    if input != output {
+        return Ok(None);
+    }
+    let backup = backups.save(file_id, input)?;
+    Ok(Some(backup.to_string_lossy().into_owned()))
+}
+
 #[tauri::command]
 pub async fn convert_file(
     app: tauri::AppHandle,
     client: tauri::State<'_, HttpClient>,
+    backups: tauri::State<'_, Backups>,
     params: ConvertParams,
 ) -> Result<ConvertFileResult, String> {
     let canonical = resolve_input(&params.input_path).await?;
@@ -214,6 +230,7 @@ pub async fn convert_file(
     .await?;
 
     let (output_path, output_name) = resolve_output(&params, &result_converter).await?;
+    let backup_path = backup_if_overwrite(&backups, &params.file_id, &canonical, &output_path)?;
 
     // Write output in the source file's encoding
     let bytes = encode_text(&converted_text, source_encoding);
@@ -231,6 +248,7 @@ pub async fn convert_file(
         output_name,
         output_path: output_path.to_string_lossy().into_owned(),
         warnings: None,
+        backup_path,
     })
 }
 
@@ -321,15 +339,16 @@ async fn convert_epub_chapter(
 pub async fn convert_epub(
     app: tauri::AppHandle,
     client: tauri::State<'_, HttpClient>,
+    backups: tauri::State<'_, Backups>,
     params: ConvertParams,
 ) -> Result<ConvertFileResult, String> {
     let canonical = resolve_input(&params.input_path).await?;
 
     // Extract EPUB
-    let (temp_dir, content_files) =
-        tokio::task::spawn_blocking(move || epub::extract_epub(&canonical))
-            .await
-            .map_err(|e| format!("EPUB_EXTRACT_FAILED:{e}"))??;
+    let input = canonical.clone();
+    let (temp_dir, content_files) = tokio::task::spawn_blocking(move || epub::extract_epub(&input))
+        .await
+        .map_err(|e| format!("EPUB_EXTRACT_FAILED:{e}"))??;
 
     let chapter_total = content_files.len();
     let mut failed_chapters: usize = 0;
@@ -371,6 +390,7 @@ pub async fn convert_epub(
     )?;
 
     let (output_path, output_name) = resolve_output(&params, &params.converter).await?;
+    let backup_path = backup_if_overwrite(&backups, &params.file_id, &canonical, &output_path)?;
 
     // Repack EPUB
     let temp_path = temp_dir.path().to_path_buf();
@@ -383,7 +403,17 @@ pub async fn convert_epub(
         output_name,
         output_path: output_path.to_string_lossy().into_owned(),
         warnings,
+        backup_path,
     })
+}
+
+/// Put back the original that overwrite mode replaced for `file_id`.
+#[tauri::command]
+pub async fn restore_backup(
+    backups: tauri::State<'_, Backups>,
+    file_id: String,
+) -> Result<(), String> {
+    backups.restore(&file_id)
 }
 
 /// Returns `true` when this build is the Windows portable distribution, which
@@ -413,6 +443,8 @@ pub fn run() {
             #[cfg(desktop)]
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
+            let backup_dir = app.path().app_cache_dir()?.join("backups");
+            app.manage(Backups::new(backup_dir)?);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -422,6 +454,7 @@ pub fn run() {
             convert_file,
             convert_epub,
             preview_convert,
+            restore_backup,
             is_portable,
         ])
         .run(tauri::generate_context!())
